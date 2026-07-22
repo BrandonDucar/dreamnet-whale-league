@@ -8,11 +8,13 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json"
+    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
+    "qa:visual": "node scripts/visual-qa.mjs"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
     "@tsconfig/svelte": "^5.0.8",
+    "@types/d3-force": "^3.0.10",
     "@types/node": "^24.13.2",
     "playwright-core": "^1.61.1",
     "svelte": "^5.56.4",
@@ -21,6 +23,8 @@
     "vite": "^8.1.1"
   },
   "dependencies": {
-    "@lucide/svelte": "^1.25.0"
+    "@lucide/svelte": "^1.25.0",
+    "d3-force": "^3.0.0",
+    "lightweight-charts": "^5.2.0"
   }
 }

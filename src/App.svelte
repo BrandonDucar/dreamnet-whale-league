@@ -1,95 +1,292 @@
 <script lang="ts">
   import {
     Activity,
-    ArrowRight,
-    BadgeCheck,
-    BookOpen,
+    ArrowDownUp,
+    BarChart3,
+    Bell,
+    Bot,
     Check,
-    ChevronRight,
+    ChevronDown,
     CircleDollarSign,
+    Clock3,
     Copy,
+    Crosshair,
     FileCheck2,
-    GraduationCap,
+    Gauge,
     Info,
+    Layers3,
+    LayoutGrid,
+    ListFilter,
     LockKeyhole,
-    Play,
+    LogIn,
+    Radio,
+    RefreshCw,
     RotateCcw,
+    Search,
     ShieldCheck,
-    Sparkles,
+    Swords,
+    Target,
+    TrendingDown,
+    TrendingUp,
     UserRound,
+    WalletCards,
+    X,
+    Zap,
   } from '@lucide/svelte'
   import { onMount } from 'svelte'
+  import MarketBubbles from './lib/MarketBubbles.svelte'
+  import MarketChart from './lib/MarketChart.svelte'
+  import MarketDepth from './lib/MarketDepth.svelte'
+  import { buildFallbackBook, buildFallbackChart, changeFor, fallbackAssets, fetchChart, fetchMarket, fetchOrderBook, formatPrice } from './lib/market'
+  import type { BattleReceipt, BubbleMetric, ChartPoint, MarketAsset, MarketWindow, Member, OpenPosition, OrderBookLevel, PaperOrder, PaperOrderSide, PaperOrderType, PositionSide, Thesis } from './lib/types'
 
-  type Strategy = 'hold' | 'balanced' | 'concentrated'
-  type Outcome = 'down' | 'flat' | 'up'
-  type Member = { displayName: string; teamName: string; joinedAt: string }
-  type Receipt = {
-    id: string
-    hash: string
-    createdAt: string
-    member: string
-    team: string
-    paperStake: number
-    strategy: Strategy
-    outcome: Outcome
-    hypotheticalPnl: number
-    endingPaperBalance: number
+  type DataStatus = 'loading' | 'live' | 'fallback'
+  type Signal = {
+    asset: MarketAsset
+    label: 'BREAKOUT' | 'REVERSAL' | 'PRESSURE' | 'RANGE'
+    direction: 'LONG BIAS' | 'SHORT BIAS' | 'WAIT'
+    score: number
+    thesis: string
+    invalidation: string
   }
 
-  const outcomeMoves: Record<Outcome, number> = { down: -0.04, flat: 0, up: 0.04 }
-  const strategyExposure: Record<Strategy, number> = { hold: 0, balanced: 0.5, concentrated: 1 }
-  const strategyLabels: Record<Strategy, string> = {
-    hold: 'Preserve paper capital',
-    balanced: 'Use 50% exposure',
-    concentrated: 'Use 100% exposure',
-  }
-  const outcomeLabels: Record<Outcome, string> = {
-    down: 'Scenario falls 4%',
-    flat: 'Scenario stays flat',
-    up: 'Scenario rises 4%',
-  }
-
+  let assets = fallbackAssets
+  let dataStatus: DataStatus = 'loading'
+  let marketWindow: MarketWindow = '24h'
+  let bubbleMetric: BubbleMetric = 'marketCap'
+  let selectedAssetId = 'bitcoin'
+  let opponentId = 'ethereum'
+  let selectedAsset = assets[0]
+  let opponent = assets[1]
+  let chartDays = 7
+  let chartPoints: ChartPoint[] = buildFallbackChart(selectedAsset, chartDays)
+  let chartLoading = false
+  let chartMode: 'live' | 'fallback' = 'fallback'
+  let bids: OrderBookLevel[] = buildFallbackBook(selectedAsset).bids
+  let asks: OrderBookLevel[] = buildFallbackBook(selectedAsset).asks
+  let bookStatus: 'loading' | 'live' | 'fallback' = 'fallback'
   let member: Member | null = null
+  let showJoin = false
   let displayName = ''
   let teamName = ''
-  let paperBalance = 1000
-  let paperStake = 100
-  let strategy: Strategy = 'balanced'
-  let outcome: Outcome = 'flat'
-  let receipt: Receipt | null = null
-  let copied = false
   let joinError = ''
-  let showEvidence = false
+  let paperBalance = 10_000
+  let paperStake = 500
+  let positionSide: PositionSide = 'left'
+  let thesis: Thesis = 'momentum'
+  let openPosition: OpenPosition | null = null
+  let secondsRemaining = 60
+  let receipts: BattleReceipt[] = []
+  let latestReceipt: BattleReceipt | null = null
+  let copied = false
+  let marketTimer: ReturnType<typeof setInterval> | null = null
+  let bookTimer: ReturnType<typeof setInterval> | null = null
+  let roundTimer: ReturnType<typeof setInterval> | null = null
+  let searchTerm = ''
+  let ticketMode: 'trade' | 'swap' = 'trade'
+  let orderType: PaperOrderType = 'market'
+  let orderSide: PaperOrderSide = 'buy'
+  let orderAmountUsd = 250
+  let orderLimit = selectedAsset.price
+  let orderStop = selectedAsset.price
+  let orderTakeProfit = selectedAsset.price * 1.05
+  let orderStopLoss = selectedAsset.price * 0.96
+  let twapDuration = 30
+  let paperOrders: PaperOrder[] = []
+  let swapToId = 'usd-coin'
+  let swapFromAmount = 0.1
+  let swapNetwork = 'Base'
+  let swapSlippage = 0.5
+
+  $: selectedAsset = assets.find((asset) => asset.id === selectedAssetId) ?? assets[0]
+  $: opponent = assets.find((asset) => asset.id === opponentId) ?? assets.find((asset) => asset.id !== selectedAssetId) ?? assets[1]
+  $: marketChange = changeFor(selectedAsset, marketWindow)
+  $: marketBreadth = assets.filter((asset) => changeFor(asset, marketWindow) > 0).length / Math.max(assets.length, 1)
+  $: marketMood = marketBreadth >= 0.68 ? 'RISK ON' : marketBreadth <= 0.38 ? 'RISK OFF' : 'MIXED TAPE'
+  $: signals = assets
+    .filter((asset) => !['USDT', 'USDC'].includes(asset.symbol))
+    .map(buildSignal)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 7)
+  $: filteredAssets = searchTerm.trim()
+    ? assets.filter((asset) => `${asset.symbol} ${asset.name}`.toLowerCase().includes(searchTerm.trim().toLowerCase()))
+    : assets
+  $: benchmarkSignal = signals[0]
+  $: swapToAsset = assets.find((asset) => asset.id === swapToId) ?? assets.find((asset) => asset.symbol === 'USDC') ?? assets[1]
+  $: swapQuote = swapToAsset.price > 0 ? (swapFromAmount * selectedAsset.price * 0.9982) / swapToAsset.price : 0
 
   onMount(() => {
-    const savedMember = localStorage.getItem('dreamnet-whale-member')
-    const savedReceipt = localStorage.getItem('dreamnet-whale-receipt')
+    const savedMember = localStorage.getItem('whale-league-member')
+    const savedReceipts = localStorage.getItem('whale-league-receipts')
+    const savedOrders = localStorage.getItem('whale-league-paper-orders')
     if (savedMember) member = JSON.parse(savedMember) as Member
-    if (savedReceipt) receipt = JSON.parse(savedReceipt) as Receipt
+    if (savedReceipts) {
+      receipts = JSON.parse(savedReceipts) as BattleReceipt[]
+      latestReceipt = receipts[0] ?? null
+    }
+    if (savedOrders) paperOrders = JSON.parse(savedOrders) as PaperOrder[]
+
+    void refreshMarket()
+    void loadChart(selectedAsset)
+    void loadDepth(selectedAsset)
+    marketTimer = setInterval(() => void refreshMarket(), 60_000)
+    bookTimer = setInterval(() => void loadDepth(selectedAsset), 12_000)
+    roundTimer = setInterval(() => {
+      if (!openPosition) return
+      secondsRemaining = Math.max(0, Math.ceil((openPosition.closesAt - Date.now()) / 1000))
+      if (secondsRemaining === 0) void closePaperPosition()
+    }, 1000)
+
+    return () => {
+      if (marketTimer) clearInterval(marketTimer)
+      if (bookTimer) clearInterval(bookTimer)
+      if (roundTimer) clearInterval(roundTimer)
+    }
   })
+
+  function buildSignal(asset: MarketAsset): Signal {
+    const momentum = asset.change1h * 0.2 + asset.change24h * 0.55 + asset.change7d * 0.25
+    const liquidityBoost = Math.min(12, Math.log10(Math.max(asset.volume, 1)) * 1.2)
+    const score = Math.max(42, Math.min(97, Math.round(58 + Math.abs(momentum) * 3.1 + liquidityBoost)))
+    if (momentum > 3) {
+      return { asset, label: 'BREAKOUT', direction: 'LONG BIAS', score, thesis: 'Positive multi-window momentum with liquid participation.', invalidation: '24h change loses zero and relative strength fades.' }
+    }
+    if (momentum < -3) {
+      return { asset, label: 'PRESSURE', direction: 'SHORT BIAS', score, thesis: 'Downside momentum is aligned across the active windows.', invalidation: '1h momentum turns positive with expanding volume.' }
+    }
+    if (asset.change24h < -1.5 && asset.change7d > 1) {
+      return { asset, label: 'REVERSAL', direction: 'WAIT', score, thesis: 'Short-term weakness sits inside a positive weekly structure.', invalidation: 'Weekly structure also turns negative.' }
+    }
+    return { asset, label: 'RANGE', direction: 'WAIT', score: Math.max(44, score - 12), thesis: 'No clean directional alignment yet.', invalidation: 'A decisive move outside the current mixed structure.' }
+  }
+
+  async function refreshMarket() {
+    dataStatus = dataStatus === 'fallback' ? 'loading' : dataStatus
+    try {
+      const nextAssets = await fetchMarket()
+      assets = nextAssets
+      dataStatus = 'live'
+      processPaperOrders(nextAssets)
+    } catch {
+      assets = fallbackAssets
+      dataStatus = 'fallback'
+    }
+  }
+
+  async function loadChart(asset: MarketAsset, days = chartDays) {
+    chartLoading = true
+    chartPoints = buildFallbackChart(asset, days)
+    chartMode = 'fallback'
+    try {
+      chartPoints = await fetchChart(asset, days)
+      chartMode = 'live'
+    } catch {
+      chartPoints = buildFallbackChart(asset, days)
+      chartMode = 'fallback'
+    } finally {
+      chartLoading = false
+    }
+  }
+
+  async function loadDepth(asset: MarketAsset) {
+    const fallback = buildFallbackBook(asset)
+    bids = fallback.bids
+    asks = fallback.asks
+    bookStatus = 'loading'
+    try {
+      const book = await fetchOrderBook(asset)
+      bids = book.bids
+      asks = book.asks
+      bookStatus = 'live'
+    } catch {
+      bookStatus = 'fallback'
+    }
+  }
+
+  function selectAsset(asset: MarketAsset) {
+    selectedAssetId = asset.id
+    if (opponentId === asset.id) opponentId = assets.find((candidate) => candidate.id !== asset.id)?.id ?? opponentId
+    orderLimit = asset.price
+    orderStop = asset.price
+    orderTakeProfit = asset.price * 1.05
+    orderStopLoss = asset.price * 0.96
+    void loadChart(asset)
+    void loadDepth(asset)
+  }
+
+  function setChartDays(days: number) {
+    chartDays = days
+    void loadChart(selectedAsset, days)
+  }
 
   function joinLeague() {
     joinError = ''
     if (displayName.trim().length < 2 || teamName.trim().length < 2) {
-      joinError = 'Add your name and a team name to enter the paper league.'
+      joinError = 'Enter your name and a paper team name.'
       return
     }
     member = { displayName: displayName.trim(), teamName: teamName.trim(), joinedAt: new Date().toISOString() }
-    localStorage.setItem('dreamnet-whale-member', JSON.stringify(member))
+    localStorage.setItem('whale-league-member', JSON.stringify(member))
+    showJoin = false
   }
 
-  function canonicalReceipt(input: Omit<Receipt, 'hash'>) {
-    return JSON.stringify({
-      createdAt: input.createdAt,
-      endingPaperBalance: input.endingPaperBalance,
-      hypotheticalPnl: input.hypotheticalPnl,
-      id: input.id,
-      member: input.member,
-      outcome: input.outcome,
-      paperStake: input.paperStake,
-      strategy: input.strategy,
-      team: input.team,
-    })
+  function openPaperPosition() {
+    if (!member) {
+      showJoin = true
+      return
+    }
+    const boundedStake = Math.max(25, Math.min(paperBalance, Number(paperStake) || 25))
+    paperStake = boundedStake
+    openPosition = {
+      id: crypto.randomUUID(),
+      openedAt: new Date().toISOString(),
+      closesAt: Date.now() + 60_000,
+      side: positionSide,
+      leftId: selectedAsset.id,
+      rightId: opponent.id,
+      leftEntry: selectedAsset.price,
+      rightEntry: opponent.price,
+      paperStake: boundedStake,
+      thesis,
+    }
+    secondsRemaining = 60
+  }
+
+  async function closePaperPosition() {
+    if (!openPosition || !member) return
+    const position = openPosition
+    const leftAsset = assets.find((asset) => asset.id === position.leftId) ?? selectedAsset
+    const rightAsset = assets.find((asset) => asset.id === position.rightId) ?? opponent
+    const leftReturn = position.leftEntry ? ((leftAsset.price - position.leftEntry) / position.leftEntry) * 100 : 0
+    const rightReturn = position.rightEntry ? ((rightAsset.price - position.rightEntry) / position.rightEntry) * 100 : 0
+    const relativeEdge = position.side === 'left' ? leftReturn - rightReturn : rightReturn - leftReturn
+    const hypotheticalPnl = Number((position.paperStake * (relativeEdge / 100)).toFixed(2))
+    const unsigned: Omit<BattleReceipt, 'hash'> = {
+      id: position.id,
+      openedAt: position.openedAt,
+      closedAt: new Date().toISOString(),
+      member: member.displayName,
+      team: member.teamName,
+      leftSymbol: leftAsset.symbol,
+      rightSymbol: rightAsset.symbol,
+      selectedSide: position.side,
+      selectedSymbol: position.side === 'left' ? leftAsset.symbol : rightAsset.symbol,
+      paperStake: position.paperStake,
+      thesis: position.thesis,
+      leftReturn: Number(leftReturn.toFixed(4)),
+      rightReturn: Number(rightReturn.toFixed(4)),
+      relativeEdge: Number(relativeEdge.toFixed(4)),
+      hypotheticalPnl,
+      fundsMoved: 0,
+      dataMode: dataStatus === 'live' ? 'live' : 'fallback',
+    }
+    const hash = await sha256(JSON.stringify(unsigned))
+    latestReceipt = { ...unsigned, hash }
+    receipts = [latestReceipt, ...receipts].slice(0, 12)
+    paperBalance = Number((paperBalance + hypotheticalPnl).toFixed(2))
+    localStorage.setItem('whale-league-receipts', JSON.stringify(receipts))
+    openPosition = null
+    secondsRemaining = 60
   }
 
   async function sha256(value: string) {
@@ -98,191 +295,393 @@
     return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('')
   }
 
-  async function runWorkout() {
-    if (!member) return
-    const boundedStake = Math.max(10, Math.min(paperBalance, paperStake))
-    paperStake = boundedStake
-    const hypotheticalPnl = Number((boundedStake * strategyExposure[strategy] * outcomeMoves[outcome]).toFixed(2))
-    const unsignedReceipt: Omit<Receipt, 'hash'> = {
+  async function copyReceipt() {
+    if (!latestReceipt) return
+    await navigator.clipboard.writeText(`sha256:${latestReceipt.hash}`)
+    copied = true
+    setTimeout(() => (copied = false), 1600)
+  }
+
+  async function placePaperOrder() {
+    if (!member) {
+      showJoin = true
+      return
+    }
+    const status: PaperOrder['status'] = orderType === 'market' || orderType === 'bracket' ? 'filled' : orderType === 'twap' ? 'scheduled' : 'open'
+    const unsigned: Omit<PaperOrder, 'hash'> = {
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
-      member: member.displayName,
-      team: member.teamName,
-      paperStake: boundedStake,
-      strategy,
-      outcome,
-      hypotheticalPnl,
-      endingPaperBalance: Number((paperBalance + hypotheticalPnl).toFixed(2)),
+      symbol: selectedAsset.symbol,
+      assetId: selectedAsset.id,
+      side: orderSide,
+      type: orderType,
+      amountUsd: Math.max(25, Number(orderAmountUsd) || 25),
+      referencePrice: selectedAsset.price,
+      limitPrice: orderType === 'limit' || orderType === 'bracket' || orderType === 'twap' ? Number(orderLimit) : undefined,
+      stopPrice: orderType === 'stop' ? Number(orderStop) : undefined,
+      takeProfit: orderType === 'bracket' ? Number(orderTakeProfit) : undefined,
+      stopLoss: orderType === 'bracket' ? Number(orderStopLoss) : undefined,
+      durationMinutes: orderType === 'twap' ? Number(twapDuration) : undefined,
+      status,
+      fundsMoved: 0,
     }
-    receipt = { ...unsignedReceipt, hash: await sha256(canonicalReceipt(unsignedReceipt)) }
-    localStorage.setItem('dreamnet-whale-receipt', JSON.stringify(receipt))
+    const order = { ...unsigned, hash: await sha256(JSON.stringify(unsigned)) }
+    paperOrders = [order, ...paperOrders].slice(0, 20)
+    localStorage.setItem('whale-league-paper-orders', JSON.stringify(paperOrders))
   }
 
-  async function copyReceipt() {
-    if (!receipt) return
-    await navigator.clipboard.writeText(`sha256:${receipt.hash}`)
-    copied = true
-    window.setTimeout(() => (copied = false), 1800)
+  async function recordPaperSwap() {
+    if (!member) {
+      showJoin = true
+      return
+    }
+    const unsigned: Omit<PaperOrder, 'hash'> = {
+      id: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
+      symbol: selectedAsset.symbol,
+      assetId: selectedAsset.id,
+      side: 'sell',
+      type: 'swap',
+      amountUsd: Number((swapFromAmount * selectedAsset.price).toFixed(2)),
+      referencePrice: selectedAsset.price,
+      toSymbol: swapToAsset.symbol,
+      quoteAmount: Number(swapQuote.toFixed(8)),
+      network: swapNetwork,
+      status: 'filled',
+      fundsMoved: 0,
+    }
+    const order = { ...unsigned, hash: await sha256(JSON.stringify(unsigned)) }
+    paperOrders = [order, ...paperOrders].slice(0, 20)
+    localStorage.setItem('whale-league-paper-orders', JSON.stringify(paperOrders))
   }
 
-  function resetWorkout() {
-    receipt = null
-    localStorage.removeItem('dreamnet-whale-receipt')
+  function processPaperOrders(nextAssets: MarketAsset[]) {
+    let changed = false
+    paperOrders = paperOrders.map((order) => {
+      if (order.status !== 'open') return order
+      const asset = nextAssets.find((candidate) => candidate.id === order.assetId)
+      if (!asset) return order
+      const limitTriggered = order.type === 'limit' && order.limitPrice !== undefined && (order.side === 'buy' ? asset.price <= order.limitPrice : asset.price >= order.limitPrice)
+      const stopTriggered = order.type === 'stop' && order.stopPrice !== undefined && (order.side === 'buy' ? asset.price >= order.stopPrice : asset.price <= order.stopPrice)
+      if (!limitTriggered && !stopTriggered) return order
+      changed = true
+      return { ...order, status: 'filled' }
+    })
+    if (changed) localStorage.setItem('whale-league-paper-orders', JSON.stringify(paperOrders))
+  }
+
+  function cancelPaperOrder(id: string) {
+    paperOrders = paperOrders.map((order) => order.id === id && (order.status === 'open' || order.status === 'scheduled') ? { ...order, status: 'cancelled' } : order)
+    localStorage.setItem('whale-league-paper-orders', JSON.stringify(paperOrders))
+  }
+
+  function signOut() {
+    member = null
+    localStorage.removeItem('whale-league-member')
+  }
+
+  function formatTimer(seconds: number) {
+    return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
   }
 </script>
 
 <svelte:head>
-  <title>Whale Intelligence League | DreamNet</title>
-  <meta name="description" content="Learn market decision-making through evidence-bounded paper scenarios with a verifiable receipt for every workout." />
+  <title>Whale Intelligence League | Live Paper Market Arena</title>
+  <meta name="description" content="Scan live crypto markets, compare assets head-to-head, and run receipted paper trading rounds with one disclosed AI teaching agent." />
 </svelte:head>
 
-<div class="app-shell">
+<div class="terminal-shell">
   <header class="topbar">
-    <a class="brand" href="#top" aria-label="Whale Intelligence League home">
-      <span class="brand-mark"><Activity size={19} strokeWidth={2.2} /></span>
-      <span>WHALE INTELLIGENCE LEAGUE</span>
+    <a class="brand" href="#market" aria-label="Whale Intelligence League market home">
+      <span class="brand-mark"><Activity size={18} strokeWidth={2.4} /></span>
+      <span class="brand-copy"><strong>WHALE</strong><small>INTELLIGENCE LEAGUE</small></span>
     </a>
-    <div class="status-cluster" aria-label="Application status">
-      <span><span class="status-dot"></span>Paper mode</span>
-      <span class="desktop-status"><LockKeyhole size={14} /> No funds connected</span>
+
+    <div class="pair-status desktop-only">
+      <span class="pair-symbol">{selectedAsset.symbol} / USD</span>
+      <strong>{formatPrice(selectedAsset.price)}</strong>
+      <span class:positive={selectedAsset.change24h >= 0} class:negative={selectedAsset.change24h < 0}>
+        {selectedAsset.change24h >= 0 ? '+' : ''}{selectedAsset.change24h.toFixed(2)}%
+      </span>
+    </div>
+
+    <div class="top-actions">
+      <span class="mode-badge"><ShieldCheck size={14} /> PAPER</span>
+      <span class="feed-status" class:feed-live={dataStatus === 'live'}>
+        <span></span>{dataStatus === 'live' ? 'LIVE FEED' : dataStatus === 'loading' ? 'SYNCING' : 'TEACHING FEED'}
+      </span>
+      <button class="icon-button desktop-only" type="button" title="Alerts"><Bell size={17} /></button>
+      {#if member}
+        <button class="account-button" type="button" onclick={signOut} title="Sign out of paper league"><UserRound size={16} /><span>{member.displayName}</span></button>
+      {:else}
+        <button class="join-button" type="button" onclick={() => (showJoin = true)}><LogIn size={16} /> Join league</button>
+      {/if}
     </div>
   </header>
 
-  <main id="top">
-    <section class="intro-band">
-      <div class="intro-copy">
-        <p class="eyebrow">DreamNet learning lab / cohort 01</p>
-        <h1>Train your market judgment without risking your money.</h1>
-        <p class="lede">Work through evidence-bounded market scenarios with DOW JONES, the league's teaching agent. Every completed workout produces a receipt showing your inputs, assumptions, and hypothetical result.</p>
-        <div class="trust-row">
-          <span><ShieldCheck size={17} /> Paper-only</span>
-          <span><FileCheck2 size={17} /> Receipted</span>
-          <span><BadgeCheck size={17} /> One disclosed agent</span>
-        </div>
-      </div>
-
-      <aside class="agent-console" aria-label="DOW JONES teaching agent">
-        <div class="agent-header">
-          <div class="agent-avatar">DJ</div>
-          <div><p class="agent-name">DOW JONES</p><p class="agent-role">Teaching agent / simulation only</p></div>
-          <span class="agent-live">READY</span>
-        </div>
-        <div class="agent-message">
-          <Sparkles size={18} />
-          <p>Today's lesson is not about guessing the market. It is about seeing how exposure changes the same hypothetical outcome.</p>
-        </div>
-        <button class="evidence-toggle" type="button" onclick={() => (showEvidence = !showEvidence)}>
-          <Info size={16} />
-          {showEvidence ? 'Hide lesson boundaries' : 'See lesson boundaries'}
-          <ChevronRight size={16} class={showEvidence ? 'rotated' : ''} />
+  <div class="market-ticker" aria-label="Market ticker">
+    <div class="ticker-track">
+      {#each assets.slice(0, 12) as asset}
+        <button type="button" onclick={() => selectAsset(asset)}>
+          <strong>{asset.symbol}</strong>
+          <span>{formatPrice(asset.price)}</span>
+          <span class:positive={asset.change24h >= 0} class:negative={asset.change24h < 0}>{asset.change24h >= 0 ? '+' : ''}{asset.change24h.toFixed(2)}%</span>
         </button>
-        {#if showEvidence}
-          <div class="evidence-note">
-            <p><strong>No live quote:</strong> the 4% move is a selectable teaching input.</p>
-            <p><strong>No prediction:</strong> the agent does not claim which outcome will occur.</p>
-            <p><strong>No execution:</strong> the app cannot place an order or move funds.</p>
+      {/each}
+    </div>
+  </div>
+
+  <div class="workspace">
+    <nav class="tool-rail" aria-label="Trading workspace">
+      <a class="active" href="#market" title="Market map"><LayoutGrid size={19} /><span>Market</span></a>
+      <a href="#arena" title="Paper arena"><Swords size={19} /><span>Arena</span></a>
+      <a href="#chart" title="Chart"><BarChart3 size={19} /><span>Chart</span></a>
+      <a href="#signals" title="AI signals"><Bot size={19} /><span>Signals</span></a>
+      <a href="#ledger" title="Receipt ledger"><FileCheck2 size={19} /><span>Ledger</span></a>
+    </nav>
+
+    <main class="market-workspace">
+      <section class="market-panel" id="market" aria-labelledby="market-title">
+        <div class="panel-toolbar">
+          <div class="panel-title"><Radio size={15} /><strong id="market-title">MARKET PULSE</strong><span>{marketMood}</span></div>
+          <div class="search-box"><Search size={14} /><input bind:value={searchTerm} aria-label="Search market" placeholder="Search symbol" /></div>
+          <div class="segmented" aria-label="Market change window">
+            {#each ['1h', '24h', '7d'] as window}
+              <button type="button" class:active={marketWindow === window} onclick={() => (marketWindow = window as MarketWindow)}>{window.toUpperCase()}</button>
+            {/each}
+          </div>
+          <div class="metric-select">
+            <ListFilter size={14} />
+            <select bind:value={bubbleMetric} aria-label="Size bubbles by"><option value="marketCap">MARKET CAP</option><option value="volume">VOLUME</option></select>
+            <ChevronDown size={13} />
+          </div>
+          <button class="icon-button" type="button" onclick={() => void refreshMarket()} title="Refresh market data"><RefreshCw size={15} class={dataStatus === 'loading' ? 'spinning' : ''} /></button>
+        </div>
+        <div class="market-canvas">
+          <MarketBubbles assets={filteredAssets} selectedId={selectedAssetId} window={marketWindow} metric={bubbleMetric} onselect={selectAsset} />
+        </div>
+        <div class="market-legend"><span><i class="gain-dot"></i>Advancing</span><span><i class="loss-dot"></i>Declining</span><span>Bubble size: {bubbleMetric === 'marketCap' ? 'market cap' : '24h volume'}</span><span>{assets.length} instruments</span></div>
+      </section>
+
+      <section class="arena-panel" id="arena" aria-labelledby="arena-title">
+        <div class="panel-toolbar arena-toolbar">
+          <div class="panel-title"><Swords size={15} /><strong id="arena-title">HEAD-TO-HEAD ARENA</strong><span>ROUND 01</span></div>
+          <div class="round-clock" class:clock-live={openPosition !== null}><Clock3 size={14} />{formatTimer(secondsRemaining)}</div>
+        </div>
+
+        <div class="contenders">
+          <button class="contender left" class:selected-side={positionSide === 'left'} type="button" onclick={() => (positionSide = 'left')}>
+            <span class="corner-label">SIDE A</span>
+            <div class="coin-orb gain-orb">{#if selectedAsset.image}<img src={selectedAsset.image} alt="" />{:else}{selectedAsset.symbol.slice(0, 1)}{/if}</div>
+            <strong>{selectedAsset.symbol}</strong>
+            <span>{formatPrice(selectedAsset.price)}</span>
+            <em class:positive={selectedAsset.change24h >= 0} class:negative={selectedAsset.change24h < 0}>{selectedAsset.change24h >= 0 ? '+' : ''}{selectedAsset.change24h.toFixed(2)}%</em>
+          </button>
+
+          <div class="versus-mark"><span>VS</span><small>RELATIVE RETURN</small></div>
+
+          <button class="contender right" class:selected-side={positionSide === 'right'} type="button" onclick={() => (positionSide = 'right')}>
+            <span class="corner-label">SIDE B</span>
+            <div class="coin-orb opponent-orb">{#if opponent.image}<img src={opponent.image} alt="" />{:else}{opponent.symbol.slice(0, 1)}{/if}</div>
+            <strong>{opponent.symbol}</strong>
+            <span>{formatPrice(opponent.price)}</span>
+            <em class:positive={opponent.change24h >= 0} class:negative={opponent.change24h < 0}>{opponent.change24h >= 0 ? '+' : ''}{opponent.change24h.toFixed(2)}%</em>
+          </button>
+        </div>
+
+        <div class="opponent-row">
+          <span>Compare {selectedAsset.symbol} against</span>
+          <select bind:value={opponentId} aria-label="Select opposing asset">
+            {#each assets.filter((asset) => asset.id !== selectedAssetId) as asset}<option value={asset.id}>{asset.symbol} / {asset.name}</option>{/each}
+          </select>
+        </div>
+
+        <div class="order-ticket">
+          <label><span>Paper stake</span><div class="ticket-input"><CircleDollarSign size={15} /><input type="number" min="25" max={paperBalance} step="25" bind:value={paperStake} /></div></label>
+          <label><span>Playbook</span><select bind:value={thesis}><option value="momentum">Momentum</option><option value="mean-reversion">Mean reversion</option><option value="defensive">Defensive</option></select></label>
+          <div class="ticket-side"><span>Selected</span><strong>{positionSide === 'left' ? selectedAsset.symbol : opponent.symbol}</strong></div>
+          {#if openPosition}
+            <button class="close-position-button" type="button" onclick={() => void closePaperPosition()}><Target size={16} /> Close paper round</button>
+          {:else}
+            <button class="enter-position-button" type="button" onclick={openPaperPosition}><Zap size={16} fill="currentColor" /> Enter paper position</button>
+          {/if}
+        </div>
+
+        {#if openPosition}
+          <div class="position-live"><span><i></i>POSITION OPEN</span><strong>{openPosition.side === 'left' ? selectedAsset.symbol : opponent.symbol}</strong><span>${openPosition.paperStake.toFixed(2)} paper</span><span>Auto-close {formatTimer(secondsRemaining)}</span></div>
+        {:else if latestReceipt}
+          <div class="position-result">
+            <span>LAST ROUND</span><strong>{latestReceipt.selectedSymbol}</strong><span class:positive={latestReceipt.hypotheticalPnl >= 0} class:negative={latestReceipt.hypotheticalPnl < 0}>{latestReceipt.hypotheticalPnl >= 0 ? '+' : '-'}${Math.abs(latestReceipt.hypotheticalPnl).toFixed(2)}</span><span>{latestReceipt.leftSymbol} vs {latestReceipt.rightSymbol}</span>
           </div>
         {/if}
-      </aside>
-    </section>
-
-    {#if !member}
-      <section class="join-band" aria-labelledby="join-title">
-        <div class="section-heading">
-          <span class="step-number">01</span>
-          <div><p class="eyebrow">Enter the league</p><h2 id="join-title">Join as yourself.</h2><p>No wallet, exchange account, or payment method is needed.</p></div>
-        </div>
-        <form class="join-form" onsubmit={(event) => { event.preventDefault(); joinLeague() }}>
-          <label>Your display name<input bind:value={displayName} autocomplete="name" placeholder="Brandon" /></label>
-          <label>Paper team name<input bind:value={teamName} placeholder="Ghostmint Research" /></label>
-          <button class="primary-button" type="submit">Join paper league <ArrowRight size={18} /></button>
-          {#if joinError}<p class="form-error">{joinError}</p>{/if}
-        </form>
       </section>
-    {:else}
-      <section class="workout-band" aria-labelledby="workout-title">
-        <div class="member-strip">
-          <div class="member-identity"><span class="member-icon"><UserRound size={18} /></span><div><strong>{member.displayName}</strong><span>{member.teamName}</span></div></div>
-          <div class="cohort-position"><span>League roster</span><strong>YOU + DOW JONES</strong></div>
+
+      <section class="chart-panel" id="chart" aria-labelledby="chart-title">
+        <div class="chart-head">
+          <div class="instrument-title">
+            {#if selectedAsset.image}<img src={selectedAsset.image} alt="" />{/if}
+            <div><span>{selectedAsset.name}</span><strong id="chart-title">{selectedAsset.symbol} / U.S. DOLLAR</strong></div>
+          </div>
+          <div class="instrument-price"><strong>{formatPrice(selectedAsset.price)}</strong><span class:positive={marketChange >= 0} class:negative={marketChange < 0}>{marketChange >= 0 ? '+' : ''}{marketChange.toFixed(2)}%</span></div>
+          <div class="chart-ranges">{#each [1, 7, 30] as days}<button type="button" class:active={chartDays === days} onclick={() => setChartDays(days)}>{days === 1 ? '1D' : `${days}D`}</button>{/each}</div>
+          <span class="chart-source">{chartLoading ? 'LOADING' : chartMode === 'live' ? 'LIVE HISTORY' : 'TEACHING SERIES'}</span>
         </div>
-        <div class="section-heading workout-heading">
-          <span class="step-number">02</span>
-          <div><p class="eyebrow">Workout 001 / exposure</p><h2 id="workout-title">See the cost of conviction.</h2><p>Choose a strategy, then test it against one hypothetical market outcome.</p></div>
+        <div class="chart-grid">
+          <div class="chart-body"><MarketChart points={chartPoints} positive={marketChange >= 0} /></div>
+          <div class="depth-wrap"><MarketDepth {bids} {asks} live={bookStatus === 'live'} /></div>
+        </div>
+        <div class="chart-foot"><span>Interactive price chart</span><span>Powered by <a href="https://www.tradingview.com/" target="_blank" rel="noreferrer">TradingView Lightweight Charts</a></span></div>
+      </section>
+    </main>
+
+    <aside class="intelligence-rail" id="signals" aria-labelledby="signals-title">
+      <section class="steward-head">
+        <div class="agent-id"><span class="agent-avatar">DJ</span><div><strong id="signals-title">DOW JONES</strong><small>AI PAPER STRATEGIST</small></div></div>
+        <span class="agent-state"><i></i>SCANNING</span>
+      </section>
+
+      <section class="tape-summary">
+        <div><span>MARKET REGIME</span><strong>{marketMood}</strong></div>
+        <div><span>ADVANCING</span><strong>{Math.round(marketBreadth * 100)}%</strong></div>
+        <div><span>DATA</span><strong>{dataStatus === 'live' ? 'PUBLIC LIVE' : 'DEMO'}</strong></div>
+      </section>
+
+      <section class="order-lab">
+        <div class="rail-heading"><span>EXECUTION LAB</span><span>PAPER ONLY</span></div>
+        <div class="ticket-modes">
+          <button type="button" class:active={ticketMode === 'trade'} onclick={() => (ticketMode = 'trade')}><BarChart3 size={13} /> TRADE</button>
+          <button type="button" class:active={ticketMode === 'swap'} onclick={() => (ticketMode = 'swap')}><ArrowDownUp size={13} /> SWAP</button>
         </div>
 
-        <div class="workout-grid">
-          <div class="control-panel">
-            <div class="control-group"><label for="balance">Starting paper balance</label><div class="money-input"><span>$</span><input id="balance" type="number" min="100" step="100" bind:value={paperBalance} /></div></div>
-            <div class="control-group"><label for="stake">Paper amount for this workout</label><div class="money-input"><span>$</span><input id="stake" type="number" min="10" max={paperBalance} step="10" bind:value={paperStake} /></div></div>
-            <fieldset>
-              <legend>Choose your exposure</legend>
-              <div class="option-list">
-                {#each Object.entries(strategyLabels) as [value, label]}
-                  <label class:active-option={strategy === value}>
-                    <input type="radio" bind:group={strategy} value={value} />
-                    <span class="radio-mark"></span>
-                    <span><strong>{label}</strong><small>{Math.round(strategyExposure[value as Strategy] * 100)}% of the paper amount exposed</small></span>
-                  </label>
-                {/each}
+        {#if ticketMode === 'trade'}
+          <div class="side-toggle">
+            <button type="button" class:buy-active={orderSide === 'buy'} onclick={() => (orderSide = 'buy')}>BUY / LONG</button>
+            <button type="button" class:sell-active={orderSide === 'sell'} onclick={() => (orderSide = 'sell')}>SELL / SHORT</button>
+          </div>
+          <div class="order-tabs">
+            {#each ['market', 'limit', 'stop', 'bracket', 'twap'] as type}
+              <button type="button" class:active={orderType === type} onclick={() => (orderType = type as PaperOrderType)}>{type.toUpperCase()}</button>
+            {/each}
+          </div>
+          <div class="trade-form">
+            <label><span>AMOUNT USD</span><div class="trade-input"><strong>$</strong><input type="number" min="25" step="25" bind:value={orderAmountUsd} /></div></label>
+            {#if orderType === 'limit' || orderType === 'bracket' || orderType === 'twap'}
+              <label><span>LIMIT / BBO</span><div class="trade-input"><strong>$</strong><input type="number" step="any" bind:value={orderLimit} /></div></label>
+            {/if}
+            {#if orderType === 'stop'}
+              <label><span>STOP TRIGGER</span><div class="trade-input"><strong>$</strong><input type="number" step="any" bind:value={orderStop} /></div></label>
+            {/if}
+            {#if orderType === 'bracket'}
+              <div class="split-fields">
+                <label><span>TAKE PROFIT</span><input type="number" step="any" bind:value={orderTakeProfit} /></label>
+                <label><span>STOP LOSS</span><input type="number" step="any" bind:value={orderStopLoss} /></label>
               </div>
-            </fieldset>
-            <div class="control-group">
-              <label for="outcome">Test an outcome</label>
-              <select id="outcome" bind:value={outcome}>{#each Object.entries(outcomeLabels) as [value, label]}<option value={value}>{label}</option>{/each}</select>
-              <p class="input-help">This is a user-selected input, not a forecast or live market move.</p>
-            </div>
-            <button class="primary-button run-button" type="button" onclick={runWorkout}><Play size={17} fill="currentColor" /> Run paper workout</button>
+            {/if}
+            {#if orderType === 'twap'}
+              <label><span>DURATION</span><select bind:value={twapDuration}><option value={15}>15 minutes</option><option value={30}>30 minutes</option><option value={60}>1 hour</option><option value={240}>4 hours</option></select></label>
+            {/if}
+            <div class="order-quote"><span>{selectedAsset.symbol} REF</span><strong>{formatPrice(selectedAsset.price)}</strong><span>FUNDS MOVED</span><strong>$0</strong></div>
+            <button class:paper-sell={orderSide === 'sell'} class="place-order" type="button" onclick={() => void placePaperOrder()}>{orderSide === 'buy' ? 'Place paper buy' : 'Place paper sell'}</button>
           </div>
+        {:else}
+          <div class="swap-form">
+            <label><span>YOU PAY</span><div class="asset-input"><input type="number" min="0" step="any" bind:value={swapFromAmount} /><strong>{selectedAsset.symbol}</strong></div></label>
+            <div class="swap-arrow"><ArrowDownUp size={15} /></div>
+            <label><span>YOU RECEIVE</span><div class="asset-input"><strong>{swapQuote.toLocaleString(undefined, { maximumFractionDigits: 6 })}</strong><select bind:value={swapToId}>{#each assets.filter((asset) => asset.id !== selectedAssetId) as asset}<option value={asset.id}>{asset.symbol}</option>{/each}</select></div></label>
+            <div class="swap-settings">
+              <label><span>NETWORK</span><select bind:value={swapNetwork}><option>Base</option><option>Ethereum</option><option>Solana</option><option>BNB Chain</option></select></label>
+              <label><span>SLIPPAGE</span><select bind:value={swapSlippage}><option value={0.1}>0.1%</option><option value={0.5}>0.5%</option><option value={1}>1.0%</option></select></label>
+            </div>
+            <div class="route-line"><span>AGGREGATED PAPER ROUTE</span><strong>0.18% fee / 0.04% impact</strong></div>
+            <button class="record-swap" type="button" onclick={() => void recordPaperSwap()}><WalletCards size={15} /> Record paper swap</button>
+          </div>
+        {/if}
+      </section>
 
-          <div class="lesson-panel">
-            <div class="lesson-header"><div><p class="eyebrow">Teaching objective</p><h3>Exposure amplifies direction.</h3></div><GraduationCap size={28} /></div>
-            <div class="comparison-table">
-              <div class="comparison-row table-head"><span>Strategy</span><span>Exposure</span><span>Result at {outcomeMoves[outcome] * 100}%</span></div>
-              {#each Object.entries(strategyLabels) as [value, label]}
-                {@const result = paperStake * strategyExposure[value as Strategy] * outcomeMoves[outcome]}
-                <div class="comparison-row" class:selected-row={strategy === value}>
-                  <span>{label}</span><span>{strategyExposure[value as Strategy] * 100}%</span><strong class:negative={result < 0} class:positive={result > 0}>{result >= 0 ? '+' : '-'}${Math.abs(result).toFixed(2)}</strong>
-                </div>
-              {/each}
-            </div>
-            <div class="teaching-callout"><BookOpen size={18} /><p>A receipt proves which scenario you tested. It does not prove future market performance or certify investment skill.</p></div>
-          </div>
+      <section class="signal-section">
+        <div class="rail-heading"><span>AI SETUPS</span><span>SCORE</span></div>
+        <div class="signal-list">
+          {#each signals as signal, index}
+            <button type="button" class:active={selectedAssetId === signal.asset.id} onclick={() => selectAsset(signal.asset)}>
+              <span class="signal-rank">{String(index + 1).padStart(2, '0')}</span>
+              <span class="signal-symbol"><strong>{signal.asset.symbol}</strong><small>{signal.label}</small></span>
+              <span class:long-bias={signal.direction === 'LONG BIAS'} class:short-bias={signal.direction === 'SHORT BIAS'}>{signal.direction}</span>
+              <strong class="signal-score">{signal.score}</strong>
+            </button>
+          {/each}
         </div>
       </section>
 
-      {#if receipt}
-        <section class="receipt-band" aria-labelledby="receipt-title">
-          <div class="receipt-title-row">
-            <div class="section-heading compact-heading"><span class="step-number completed"><Check size={18} /></span><div><p class="eyebrow">Workout recorded</p><h2 id="receipt-title">Your paper receipt</h2></div></div>
-            <button class="icon-button" type="button" onclick={resetWorkout} title="Reset workout"><RotateCcw size={18} /></button>
-          </div>
-          <div class="receipt-card">
-            <div class="receipt-summary">
-              <div><span>Hypothetical P/L</span><strong class:negative={receipt.hypotheticalPnl < 0} class:positive={receipt.hypotheticalPnl > 0}>{receipt.hypotheticalPnl >= 0 ? '+' : '-'}${Math.abs(receipt.hypotheticalPnl).toFixed(2)}</strong></div>
-              <div><span>Ending paper balance</span><strong>${receipt.endingPaperBalance.toFixed(2)}</strong></div>
-              <div><span>Funds moved</span><strong>$0.00</strong></div>
-            </div>
-            <dl class="receipt-details">
-              <div><dt>Member</dt><dd>{receipt.member} / {receipt.team}</dd></div>
-              <div><dt>Strategy</dt><dd>{strategyLabels[receipt.strategy]}</dd></div>
-              <div><dt>Outcome input</dt><dd>{outcomeLabels[receipt.outcome]}</dd></div>
-              <div><dt>Recorded</dt><dd>{new Date(receipt.createdAt).toLocaleString()}</dd></div>
-            </dl>
-            <div class="receipt-hash">
-              <div><span>SHA-256 receipt</span><code>sha256:{receipt.hash}</code></div>
-              <button class="copy-button" type="button" onclick={copyReceipt}>{#if copied}<Check size={16} /> Copied{:else}<Copy size={16} /> Copy{/if}</button>
-            </div>
-          </div>
+      {#if benchmarkSignal}
+        <section class="agent-brief">
+          <div class="brief-title"><Crosshair size={15} /><span>DOW JONES BENCHMARK</span><strong>SIM 01</strong></div>
+          <p><strong>{benchmarkSignal.asset.symbol} / {benchmarkSignal.direction}</strong></p>
+          <p>{benchmarkSignal.thesis}</p>
+          <div class="invalidation"><span>INVALIDATION</span><p>{benchmarkSignal.invalidation}</p></div>
+          <div class="brief-boundary"><Info size={13} />Heuristic teaching setup, not a forecast or order.</div>
         </section>
       {/if}
-    {/if}
 
-    <section class="principles-band" aria-label="League principles">
-      <article><CircleDollarSign size={23} /><h3>No capital at risk</h3><p>The first release has no exchange, wallet, signing, order, or settlement capability.</p></article>
-      <article><FileCheck2 size={23} /><h3>Proof over performance theater</h3><p>Receipts preserve the actual inputs. We do not seed fake traders, rankings, or returns.</p></article>
-      <article><GraduationCap size={23} /><h3>Teach before testing</h3><p>DOW JONES is disclosed as a simulation agent and explains the lesson's limits.</p></article>
-    </section>
-  </main>
+      <section class="league-section" id="ledger">
+        <div class="rail-heading"><span>LEAGUE DESK</span><span>PAPER P/L</span></div>
+        <div class="league-row agent-row"><span class="agent-avatar mini">DJ</span><span><strong>DOW JONES</strong><small>DISCLOSED SIM AGENT</small></span><strong>BENCHMARK</strong></div>
+        <div class="league-row">
+          <span class="user-avatar"><UserRound size={15} /></span>
+          <span><strong>{member?.displayName ?? 'YOU'}</strong><small>{member?.teamName ?? 'JOIN TO RECORD ROUNDS'}</small></span>
+          <strong>${paperBalance.toFixed(2)}</strong>
+        </div>
+      </section>
 
-  <footer><span>DreamNet / Whale Intelligence League</span><span>Educational paper simulation. Not financial advice.</span></footer>
+      <section class="receipt-section">
+        <div class="rail-heading"><span>RECEIPT LEDGER</span><span>{receipts.length}</span></div>
+        {#if latestReceipt}
+          <div class="receipt-preview">
+            <div><span>{latestReceipt.leftSymbol} / {latestReceipt.rightSymbol}</span><strong class:positive={latestReceipt.hypotheticalPnl >= 0} class:negative={latestReceipt.hypotheticalPnl < 0}>{latestReceipt.hypotheticalPnl >= 0 ? '+' : '-'}${Math.abs(latestReceipt.hypotheticalPnl).toFixed(2)}</strong></div>
+            <code>sha256:{latestReceipt.hash.slice(0, 16)}...{latestReceipt.hash.slice(-8)}</code>
+            <div class="receipt-actions"><span><LockKeyhole size={12} />$0 moved</span><button type="button" onclick={copyReceipt}>{#if copied}<Check size={13} /> Copied{:else}<Copy size={13} /> Copy hash{/if}</button></div>
+          </div>
+        {:else}
+          <div class="empty-ledger"><FileCheck2 size={19} /><span>No completed rounds yet.</span></div>
+        {/if}
+      </section>
+
+      <section class="orders-section">
+        <div class="rail-heading"><span>PAPER ORDERS</span><span>{paperOrders.length}</span></div>
+        {#if paperOrders.length}
+          {#each paperOrders.slice(0, 4) as order}
+            <div class="paper-order-row">
+              <span><strong>{order.symbol}{order.toSymbol ? ` → ${order.toSymbol}` : ''}</strong><small>{order.type.toUpperCase()} / {order.side.toUpperCase()}</small></span>
+              <span class:positive={order.status === 'filled'} class:negative={order.status === 'cancelled'}>{order.status.toUpperCase()}</span>
+              {#if order.status === 'open' || order.status === 'scheduled'}<button type="button" onclick={() => cancelPaperOrder(order.id)} title="Cancel paper order"><X size={12} /></button>{:else}<i></i>{/if}
+            </div>
+          {/each}
+        {:else}
+          <div class="empty-ledger"><Layers3 size={19} /><span>No paper orders.</span></div>
+        {/if}
+      </section>
+    </aside>
+  </div>
+
+  <footer class="statusbar">
+    <span><i class="status-light"></i>WHLE PAPER ENGINE ONLINE</span>
+    <span>PUBLIC MARKET DATA / NO BROKER</span>
+    <span>ORDERS 0 LIVE / FUNDS $0.00</span>
+    <span class="desktop-only">Educational simulation. Not financial advice.</span>
+  </footer>
 </div>
+
+{#if showJoin}
+  <div class="modal-backdrop" role="presentation" onclick={(event) => { if (event.currentTarget === event.target) showJoin = false }}>
+    <div class="join-modal" role="dialog" aria-modal="true" aria-labelledby="join-title">
+      <div class="modal-head"><div><span>PAPER LEAGUE ACCESS</span><h2 id="join-title">Create your desk</h2></div><button class="icon-button" type="button" onclick={() => (showJoin = false)} title="Close"><X size={18} /></button></div>
+      <p>Join as yourself. This creates a local paper profile so your rounds and receipts stay attached to you on this device.</p>
+      <form onsubmit={(event) => { event.preventDefault(); joinLeague() }}>
+        <label><span>Display name</span><input bind:value={displayName} autocomplete="name" placeholder="Your name" /></label>
+        <label><span>Paper desk</span><input bind:value={teamName} placeholder="Your team or research desk" /></label>
+        {#if joinError}<div class="form-error">{joinError}</div>{/if}
+        <button class="join-submit" type="submit"><Gauge size={17} /> Open paper desk</button>
+      </form>
+      <div class="modal-boundaries"><span><ShieldCheck size={14} />No wallet</span><span><LockKeyhole size={14} />Local profile</span><span><RotateCcw size={14} />Reset anytime</span></div>
+    </div>
+  </div>
+{/if}
