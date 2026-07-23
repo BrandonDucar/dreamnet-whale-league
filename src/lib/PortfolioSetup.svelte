@@ -3,12 +3,14 @@
   import { onMount } from 'svelte'
   import { scanConnectedWallet } from './portfolio'
   import type { MarketAsset, WalletHolding } from './types'
+  import type { InjectedWalletProvider } from './wallet'
   import { chainName, shortAddress } from './wallet'
 
   export let walletAddress = ''
   export let walletChainId = ''
   export let assets: MarketAsset[] = []
   export let initialHoldings: WalletHolding[] = []
+  export let walletProvider: InjectedWalletProvider | undefined = undefined
   export let onconnect: () => void
   export let onholdings: (holdings: WalletHolding[]) => void
 
@@ -31,6 +33,11 @@
   let maxPositionPct = 5
   let leverageCeiling = 1
   let generatedPlan = ''
+
+  $: if (scanStatus !== 'scanning' && initialHoldings !== holdings) {
+    holdings = initialHoldings
+    nativeBalance = holdings.find((holding) => holding.isNative)?.quantity ?? (holdings.length ? 0 : null)
+  }
 
   onMount(() => {
     holdings = initialHoldings
@@ -61,11 +68,13 @@
     scanStatus = 'scanning'
     scanMessage = ''
     try {
-      holdings = await scanConnectedWallet(walletAddress, walletChainId, assets)
+      holdings = await scanConnectedWallet(walletAddress, walletChainId, assets, walletProvider)
       nativeBalance = holdings.find((holding) => holding.isNative)?.quantity ?? 0
       onholdings(holdings)
       scanStatus = 'complete'
-      scanMessage = `${holdings.length} holding${holdings.length === 1 ? '' : 's'} copied into your local paper portfolio. Your wallet remains read-only.`
+      scanMessage = holdings.length
+        ? `${holdings.length} holding${holdings.length === 1 ? '' : 's'} copied beneath FKUSDC in your paper balance sheet. Your wallet remains read-only.`
+        : 'No non-zero supported balances were found on this network. Your 500 FKUSDC practice balance is still ready.'
     } catch (error) {
       scanStatus = 'error'
       scanMessage = error instanceof Error ? error.message : 'Portfolio scan failed.'
@@ -112,7 +121,7 @@
           {/each}
         </div>
       {/if}
-      <div class="coverage-line"><span>SCAN COVERAGE</span><span>CURRENT EVM NETWORK / NATIVE + INDEXED ERC-20</span><strong>READ ONLY · <a href="https://www.blockscout.com/" target="_blank" rel="noreferrer">POWERED BY BLOCKSCOUT</a></strong></div>
+      <div class="coverage-line"><span>SCAN COVERAGE</span><span>CURRENT EVM NETWORK / NATIVE + INDEXED ERC-20 + RPC-VERIFIED CORE ASSETS</span><strong>READ ONLY · INDEXER WITH ONCHAIN RPC FALLBACK</strong></div>
     </section>
 
     <section class="risk-step">
@@ -166,7 +175,6 @@
   .coverage-line span:first-child { color: var(--amber); }
   .coverage-line span:nth-child(2) { color: var(--muted); }
   .coverage-line strong { color: var(--text); }
-  .coverage-line a { color: var(--cyan); }
   .holding-preview { max-height: 208px; overflow-y: auto; margin-top: 8px; border: 1px solid var(--line); }
   .holding-preview > div { min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 9px; border-bottom: 1px solid var(--line); }
   .holding-preview > div:last-child { border-bottom: 0; }

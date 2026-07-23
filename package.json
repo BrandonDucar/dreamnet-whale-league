@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "tsx tests/portfolio.test.ts",
     "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
     "qa:visual": "node scripts/visual-qa.mjs"
   },
@@ -20,6 +21,7 @@
     "playwright-core": "^1.61.1",
     "svelte": "^5.56.4",
     "svelte-check": "^4.7.1",
+    "tsx": "^4.23.1",
     "typescript": "~6.0.2",
     "vite": "^8.1.1"
   },

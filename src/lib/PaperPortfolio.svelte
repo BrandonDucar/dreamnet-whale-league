@@ -41,6 +41,9 @@
       <span>${fkUsdcBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
       <span>$0.00</span>
     </div>
+    {#if positions.length}
+      <div class="wallet-snapshot-label"><WalletCards size={13} /><span>CONNECTED WALLET SNAPSHOT</span><strong>{positions.length} ASSET{positions.length === 1 ? '' : 'S'} · READ ONLY</strong></div>
+    {/if}
     {#each positions as position}
       {@const price = livePrice(position)}
       {@const value = position.quantity * price}
@@ -88,6 +91,8 @@
   .portfolio-row small { color: var(--muted); font: 600 7px/1 'IBM Plex Mono', monospace; }
   .fkusdc-row { background: #0f140a; }
   .fkusdc-row i { border-color: #688224; color: var(--lime); }
+  .wallet-snapshot-label { min-width: 670px; min-height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 12px; border-bottom: 1px solid #244850; background: #09161a; color: var(--cyan); font: 700 7px/1 'IBM Plex Mono', monospace; }
+  .wallet-snapshot-label strong { margin-left: auto; color: var(--muted); font-weight: 700; }
   .portfolio-empty { min-height: 170px; display: grid; place-content: center; justify-items: center; gap: 8px; color: var(--muted); text-align: center; }
   .portfolio-empty strong { color: var(--text); font-size: 12px; }
   .portfolio-empty span { max-width: 360px; font-size: 9px; line-height: 1.45; }

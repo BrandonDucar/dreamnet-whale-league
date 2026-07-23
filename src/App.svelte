@@ -45,7 +45,7 @@
   import type { ReownChoice, ReownConnection } from './lib/appkit'
   import type { FarcasterIdentity as FarcasterIdentityData } from './lib/farcaster'
   import { buildFallbackBook, buildFallbackChart, changeFor, fallbackAssets, fetchChart, fetchMarket, fetchOrderBook, formatPrice } from './lib/market'
-  import { estimatePaperFee } from './lib/portfolio'
+  import { estimatePaperFee, scanConnectedWallet } from './lib/portfolio'
   import { chainName, connectInjectedWallet, getInjectedWallet, readInjectedWallet, shortAddress } from './lib/wallet'
   import type { InjectedWalletProvider } from './lib/wallet'
   import type { BattleReceipt, BubbleMetric, ChartPoint, MarketAsset, MarketWindow, Member, OrderBookLevel, PaperFeeQuote, PaperOrder, PaperOrderSide, PaperOrderType, PaperPosition, WalletHolding } from './lib/types'
@@ -119,6 +119,7 @@
   let walletAddress = ''
   let walletChainId = ''
   let walletMode: 'connected' | 'watch' | '' = ''
+  let walletProvider: InjectedWalletProvider | undefined = undefined
   let walletNotice = ''
   let walletHoldings: WalletHolding[] = []
   let paperPositions: PaperPosition[] = []
@@ -191,6 +192,7 @@
     if (!localStorage.getItem('whale-guided-tour-v3')) showTutorial = true
 
     const wallet = getInjectedWallet()
+    walletProvider = wallet
     const onAccountsChanged = (value: unknown) => {
       const accounts = Array.isArray(value) ? value as string[] : []
       const nextAddress = accounts[0] ?? ''
@@ -451,6 +453,20 @@
     paperStartingValue = Number((500 + holdings.reduce((sum, holding) => sum + holding.valueUsd, 0)).toFixed(2))
     persistPaperPortfolio()
     walletNotice = `Paper portfolio reset from ${holdings.length} read-only holding${holdings.length === 1 ? '' : 's'} plus 500 FKUSDC.`
+  }
+
+  async function importWalletSnapshot(address: string, chainId: string, provider?: InjectedWalletProvider) {
+    walletNotice = `Scanning public ${chainName(chainId)} balances for ${shortAddress(address)}...`
+    try {
+      const holdings = await scanConnectedWallet(address, chainId, assets, provider)
+      if (walletAddress.toLowerCase() !== address.toLowerCase() || walletChainId.toLowerCase() !== chainId.toLowerCase()) return
+      handleHoldings(holdings)
+      walletNotice = holdings.length
+        ? `${holdings.length} wallet holding${holdings.length === 1 ? ' now appears' : 's now appear'} directly beneath 500 FKUSDC in your paper balance sheet.`
+        : `No non-zero supported balances were found on ${chainName(chainId)}. Your 500 FKUSDC practice balance is ready.`
+    } catch (error) {
+      walletNotice = error instanceof Error ? `Wallet scan failed: ${error.message}` : 'Wallet scan failed.'
+    }
   }
 
   function livePositionPrice(position: PaperPosition) {
@@ -761,6 +777,7 @@
     walletAddress = connection.address
     walletChainId = connection.chainId
     walletMode = 'connected'
+    walletProvider = connection.provider
     persistWalletSelection()
 
     if (reownIntent === 'identity-email') {
@@ -774,6 +791,7 @@
       showWallet = false
       activeEnvironment = 'desk'
       walletNotice = `Connected ${shortAddress(connection.address)} on ${chainName(connection.chainId)}. Trading authority has not been granted.`
+      void importWalletSnapshot(connection.address, connection.chainId, connection.provider)
     }
     reownIntent = ''
   }
@@ -796,10 +814,12 @@
       walletAddress = connection.address
       walletChainId = connection.chainId
       walletMode = 'connected'
+      walletProvider = selectedProvider
       persistWalletSelection()
       showWallet = false
       activeEnvironment = 'desk'
       walletNotice = `Connected ${shortAddress(walletAddress)} on ${chainName(walletChainId)}. Trading authority has not been granted.`
+      void importWalletSnapshot(connection.address, connection.chainId, selectedProvider)
     } catch (error) {
       walletNotice = error instanceof Error ? error.message : 'Wallet connection failed.'
       throw error
@@ -811,10 +831,12 @@
     walletAddress = address
     walletChainId = chainId
     walletMode = 'watch'
+    walletProvider = undefined
     persistWalletSelection()
     showWallet = false
     activeEnvironment = 'desk'
     walletNotice = `Watching ${shortAddress(address)} on ${chainName(chainId)}. No wallet connection or signing permission was requested.`
+    void importWalletSnapshot(address, chainId)
   }
 
 </script>
@@ -966,7 +988,7 @@
           <button class="create-desk-button" type="button" onclick={() => (showJoin = true)}><UserRound size={16} /> Create paper desk</button>
         {/if}
       </section>
-      <PortfolioSetup {walletAddress} {walletChainId} {assets} initialHoldings={walletHoldings} onconnect={() => (showWallet = true)} onholdings={handleHoldings} />
+      <PortfolioSetup {walletAddress} {walletChainId} {walletProvider} {assets} initialHoldings={walletHoldings} onconnect={() => (showWallet = true)} onholdings={handleHoldings} />
       <PaperPortfolio
         {walletAddress}
         positions={paperPositions}

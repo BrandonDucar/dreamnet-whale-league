@@ -84,8 +84,8 @@ export async function connectInjectedWallet(selectedProvider?: InjectedWalletPro
   return { address: accounts[0], chainId }
 }
 
-export async function readNativeBalance(address: string) {
-  const wallet = provider()
+export async function readNativeBalance(address: string, selectedProvider?: InjectedWalletProvider) {
+  const wallet = selectedProvider ?? provider()
   if (!wallet) throw new Error('No injected EVM wallet was found in this browser.')
   const result = await wallet.request({ method: 'eth_getBalance', params: [address, 'latest'] })
   if (typeof result !== 'string') throw new Error('The wallet returned an invalid balance.')
