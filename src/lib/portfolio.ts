@@ -15,6 +15,7 @@ type BlockscoutTokenBalance = {
 }
 
 type BlockscoutAddress = {
+  coin_balance?: string
   exchange_rate?: string
 }
 
@@ -45,7 +46,8 @@ export async function scanConnectedWallet(address: string, chainId: string, asse
   const normalizedChainId = chainId.toLowerCase()
   const config = chainConfig[normalizedChainId] ?? { nativeSymbol: 'NATIVE', nativeAssetId: '' }
   const observedAt = new Date().toISOString()
-  const nativeBalance = await readNativeBalance(address)
+  let nativeBalance = 0
+  let nativeBalanceSource: WalletHolding['source'] = 'wallet-rpc'
   const nativeAsset = assets.find((asset) => asset.id === config.nativeAssetId || asset.symbol === config.nativeSymbol)
   let nativePrice = nativeAsset?.price ?? 0
   let tokenBalances: BlockscoutTokenBalance[] = []
@@ -61,8 +63,22 @@ export async function scanConnectedWallet(address: string, chainId: string, asse
         return response.json() as Promise<BlockscoutTokenBalance[]>
       }),
     ])
-    if (addressResult.status === 'fulfilled') nativePrice = finiteNumber(addressResult.value.exchange_rate, nativePrice)
+    if (addressResult.status === 'fulfilled') {
+      nativePrice = finiteNumber(addressResult.value.exchange_rate, nativePrice)
+      if (addressResult.value.coin_balance) {
+        nativeBalance = decimalQuantity(addressResult.value.coin_balance, '18')
+        nativeBalanceSource = 'blockscout'
+      }
+    }
     if (tokenResult.status === 'fulfilled') tokenBalances = tokenResult.value
+  }
+
+  if (nativeBalanceSource === 'wallet-rpc' && getInjectedWallet()) {
+    try {
+      nativeBalance = await readNativeBalance(address)
+    } catch {
+      nativeBalance = 0
+    }
   }
 
   const nativeHolding: WalletHolding = {
@@ -77,7 +93,7 @@ export async function scanConnectedWallet(address: string, chainId: string, asse
     image: nativeAsset?.image,
     isNative: true,
     tradeable: Boolean(nativeAsset),
-    source: 'wallet-rpc',
+    source: nativeBalanceSource,
     observedAt,
   }
 
