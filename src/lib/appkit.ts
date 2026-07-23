@@ -76,7 +76,12 @@ async function getAppKit() {
 export async function openReown(choice: ReownChoice) {
   const { appKit, walletButton } = await getAppKit()
   if (choice === 'email') {
-    await appKit.open({ namespace: 'eip155', view: 'Connect' })
+    // AppKit 1.8 supports this router view, but its public open() type omits it.
+    const openEmailLogin = appKit.open as unknown as (options: {
+      namespace: 'eip155'
+      view: 'EmailLogin'
+    }) => Promise<void>
+    await openEmailLogin({ namespace: 'eip155', view: 'EmailLogin' })
     return
   }
 
