@@ -144,6 +144,7 @@
     : assets
   $: benchmarkSignal = signals[0]
   $: swapToAsset = assets.find((asset) => asset.id === swapToId) ?? assets.find((asset) => asset.symbol === 'USDC') ?? assets[1]
+  $: swapQuote = swapToAsset.price > 0 ? (swapFromAmount * selectedAsset.price * 0.9982) / swapToAsset.price : 0
   $: activeEnvironmentMeta = environments.find((environment) => environment.id === activeEnvironment) ?? environments[0]
 
   onMount(() => {
