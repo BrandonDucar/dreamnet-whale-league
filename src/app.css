@@ -279,17 +279,34 @@ a { color: inherit; text-decoration: none; }
 .wallet-toast svg:last-child { margin-left: auto; flex: 0 0 auto; }
 
 .modal-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 18px; background: rgba(2,4,5,.82); }
-.join-modal { width: min(440px, 100%); border: 1px solid var(--line-bright); border-radius: 5px; background: #0c1114; box-shadow: 0 24px 70px rgba(0,0,0,.65); }
+.join-modal { width: min(560px, 100%); max-height: calc(100vh - 36px); overflow-y: auto; border: 1px solid var(--line-bright); border-radius: 5px; background: #0c1114; box-shadow: 0 24px 70px rgba(0,0,0,.65); }
 .modal-head { min-height: 70px; display: flex; align-items: center; justify-content: space-between; padding: 0 17px; border-bottom: 1px solid var(--line); }
 .modal-head span { color: var(--green); font: 700 8px/1 'IBM Plex Mono', monospace; }
 .modal-head h2 { margin: 5px 0 0; font-size: 20px; }
 .join-modal > p { margin: 0; padding: 15px 17px 0; color: #929da3; font-size: 12px; line-height: 1.55; }
+.identity-entry { display: grid; gap: 10px; padding: 16px 17px 3px; }
+.identity-divider { height: 15px; display: flex; align-items: center; gap: 9px; color: #5f6870; font: 700 7px/1 'IBM Plex Mono', monospace; }
+.identity-divider::before, .identity-divider::after { content: ''; height: 1px; flex: 1; background: var(--line); }
+.email-login, .email-identity { width: 100%; min-height: 48px; display: grid; grid-template-columns: 28px minmax(0, 1fr) 18px; align-items: center; gap: 9px; padding: 0 11px; border: 1px solid var(--line); background: #0a0d10; color: var(--text); text-align: left; }
+.email-login { grid-template-columns: 28px minmax(0, 1fr); cursor: pointer; }
+.email-login:hover { border-color: var(--cyan); background: #0a171a; }
+.email-login > span, .email-identity > span { display: grid; gap: 4px; }
+.email-login small, .email-identity small { color: var(--muted); font: 600 7px/1 'IBM Plex Mono', monospace; }
+.email-identity { border-color: #3b745d; background: #0b1713; }
+.email-identity > svg:last-child { color: var(--green); }
+.email-activation { padding: 7px 8px; border-left: 2px solid #d9a441; background: #1a150b; color: #b9a172; font-size: 8px; line-height: 1.4; }
 .join-modal form { display: grid; gap: 12px; padding: 16px 17px; }
+.desk-step { display: grid; grid-template-columns: 27px minmax(0, 1fr); gap: 9px; align-items: center; }
+.desk-step > span { width: 27px; height: 27px; display: grid; place-items: center; background: var(--hot); color: #19020d; font: 800 8px/1 'IBM Plex Mono', monospace; }
+.desk-step > div { display: grid; gap: 3px; }
+.desk-step strong { font-size: 11px; }
+.desk-step small { color: var(--muted); font-size: 8px; line-height: 1.4; }
 .join-modal label { display: grid; gap: 6px; }
 .join-modal label span { color: var(--muted); font: 600 9px/1 'IBM Plex Mono', monospace; }
 .join-modal input { height: 40px; padding: 0 11px; border: 1px solid var(--line); border-radius: 2px; outline: 0; background: #07090b; color: var(--text); }
 .join-modal input:focus { border-color: var(--green); }
 .join-submit { height: 40px; display: flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid #2c9d70; border-radius: 3px; background: var(--green); color: #04110b; cursor: pointer; font-weight: 800; }
+.join-submit:disabled { cursor: not-allowed; opacity: .42; }
 .form-error { color: #ff8a91; font-size: 11px; }
 .modal-boundaries { min-height: 42px; display: flex; align-items: center; justify-content: space-around; border-top: 1px solid var(--line); color: #7e8a91; font: 600 8px/1 'IBM Plex Mono', monospace; }
 .modal-boundaries span { display: inline-flex; align-items: center; gap: 5px; }

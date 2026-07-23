@@ -16,6 +16,7 @@
     "@tsconfig/svelte": "^5.0.8",
     "@types/d3-force": "^3.0.10",
     "@types/node": "^24.13.2",
+    "@types/qrcode": "^1.5.6",
     "playwright-core": "^1.61.1",
     "svelte": "^5.56.4",
     "svelte-check": "^4.7.1",
@@ -23,8 +24,18 @@
     "vite": "^8.1.1"
   },
   "dependencies": {
+    "@farcaster/auth-client": "^0.7.1",
     "@lucide/svelte": "^1.25.0",
+    "@reown/appkit": "^1.8.23",
+    "@reown/appkit-adapter-ethers": "^1.8.23",
+    "@reown/appkit-wallet-button": "^1.8.23",
     "d3-force": "^3.0.0",
-    "lightweight-charts": "^5.2.0"
+    "ethers": "^6.17.0",
+    "lightweight-charts": "^5.2.0",
+    "qrcode": "^1.5.4",
+    "viem": "^2.55.8"
+  },
+  "overrides": {
+    "axios": "^1.18.1"
   }
 }

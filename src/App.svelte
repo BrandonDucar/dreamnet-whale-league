@@ -17,6 +17,7 @@
     ListFilter,
     LockKeyhole,
     LogIn,
+    Mail,
     Radio,
     RefreshCw,
     RotateCcw,
@@ -37,8 +38,12 @@
   import PlayerArena from './lib/PlayerArena.svelte'
   import TraderGallery from './lib/TraderGallery.svelte'
   import Tutorial from './lib/Tutorial.svelte'
+  import FarcasterIdentity from './lib/FarcasterIdentity.svelte'
   import WalletDialog from './lib/WalletDialog.svelte'
   import WhaleIntelligence from './lib/WhaleIntelligence.svelte'
+  import { hasReownProject, openReown, subscribeReownConnection } from './lib/appkit'
+  import type { ReownChoice, ReownConnection } from './lib/appkit'
+  import type { FarcasterIdentity as FarcasterIdentityData } from './lib/farcaster'
   import { buildFallbackBook, buildFallbackChart, changeFor, fallbackAssets, fetchChart, fetchMarket, fetchOrderBook, formatPrice } from './lib/market'
   import { estimatePaperFee } from './lib/portfolio'
   import { chainName, connectInjectedWallet, getInjectedWallet, readInjectedWallet, shortAddress } from './lib/wallet'
@@ -83,6 +88,10 @@
   let showJoin = false
   let showWallet = false
   let showTutorial = false
+  let farcasterIdentity: FarcasterIdentityData | null = null
+  let emailIdentityAddress = ''
+  let reownIntent: 'identity-email' | 'wallet' | '' = ''
+  let reownUnsubscribe: (() => void) | undefined
   let displayName = ''
   let teamName = ''
   let joinError = ''
@@ -118,6 +127,7 @@
   let latestFeeQuote: PaperFeeQuote | null = null
   let activeEnvironment: Environment = 'markets'
   let researchView: ResearchView = 'sources'
+  const reownConfigured = hasReownProject()
 
   $: selectedAsset = assets.find((asset) => asset.id === selectedAssetId) ?? assets[0]
   $: marketChange = changeFor(selectedAsset, marketWindow)
@@ -212,6 +222,11 @@
     }
     wallet?.on?.('accountsChanged', onAccountsChanged)
     wallet?.on?.('chainChanged', onChainChanged)
+    if (reownConfigured) {
+      void subscribeReownConnection(handleReownConnection).then((unsubscribe) => {
+        reownUnsubscribe = unsubscribe
+      }).catch(() => undefined)
+    }
 
     void refreshMarket()
     void loadChart(selectedAsset)
@@ -223,6 +238,7 @@
       if (bookTimer) clearInterval(bookTimer)
       wallet?.removeListener?.('accountsChanged', onAccountsChanged)
       wallet?.removeListener?.('chainChanged', onChainChanged)
+      reownUnsubscribe?.()
     }
   })
 
@@ -302,16 +318,51 @@
 
   function joinLeague() {
     joinError = ''
-    if (displayName.trim().length < 2 || teamName.trim().length < 2) {
-      joinError = 'Enter your name and a paper team name.'
+    if (!farcasterIdentity && !emailIdentityAddress) {
+      joinError = 'Continue with Farcaster or email before creating the desk.'
       return
     }
-    member = { displayName: displayName.trim(), teamName: teamName.trim(), joinedAt: new Date().toISOString() }
+    if ((!farcasterIdentity && displayName.trim().length < 2) || teamName.trim().length < 2) {
+      joinError = 'Enter your name and a paper desk name.'
+      return
+    }
+    const identityName = farcasterIdentity?.displayName ?? displayName.trim()
+    member = {
+      authMethod: farcasterIdentity ? 'farcaster' : 'email',
+      displayName: identityName,
+      fid: farcasterIdentity?.fid,
+      joinedAt: new Date().toISOString(),
+      pfpUrl: farcasterIdentity?.pfpUrl,
+      teamName: teamName.trim(),
+      username: farcasterIdentity?.username,
+    }
     localStorage.setItem('whale-league-member', JSON.stringify(member))
     showJoin = false
     activeEnvironment = 'desk'
     walletNotice = `${member.teamName} is ready with 500 FKUSDC. Attach a wallet or build your paper plan next.`
+    window.setTimeout(() => {
+      if (!walletAddress) showWallet = true
+    }, 180)
     requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }))
+  }
+
+  function setFarcasterIdentity(identity: FarcasterIdentityData) {
+    farcasterIdentity = identity
+    emailIdentityAddress = ''
+    displayName = identity.displayName
+    if (!teamName.trim()) teamName = `${identity.username}'s desk`
+    joinError = ''
+  }
+
+  async function startEmailIdentity() {
+    reownIntent = 'identity-email'
+    joinError = ''
+    try {
+      await openReown('email')
+    } catch (error) {
+      reownIntent = ''
+      joinError = error instanceof Error ? error.message : 'Email login failed to open.'
+    }
   }
 
   function recordBattleReceipt(receipt: BattleReceipt) {
@@ -698,7 +749,44 @@
 
   function signOut() {
     member = null
+    emailIdentityAddress = ''
+    farcasterIdentity = null
+    displayName = ''
+    teamName = ''
     localStorage.removeItem('whale-league-member')
+  }
+
+  function handleReownConnection(connection: ReownConnection) {
+    syncPortfolioWallet(connection.address)
+    walletAddress = connection.address
+    walletChainId = connection.chainId
+    walletMode = 'connected'
+    persistWalletSelection()
+
+    if (reownIntent === 'identity-email') {
+      emailIdentityAddress = connection.address
+      farcasterIdentity = null
+      if (!displayName.trim()) displayName = 'Email trader'
+      if (!teamName.trim()) teamName = 'My trading desk'
+      joinError = ''
+      walletNotice = `Email identity verified with ${shortAddress(connection.address)}. Name your desk to continue.`
+    } else {
+      showWallet = false
+      activeEnvironment = 'desk'
+      walletNotice = `Connected ${shortAddress(connection.address)} on ${chainName(connection.chainId)}. Trading authority has not been granted.`
+    }
+    reownIntent = ''
+  }
+
+  async function connectExternalWallet(choice: ReownChoice) {
+    reownIntent = 'wallet'
+    try {
+      await openReown(choice)
+    } catch (error) {
+      reownIntent = ''
+      walletNotice = error instanceof Error ? error.message : 'Wallet connection failed to open.'
+      throw error
+    }
   }
 
   async function connectWallet(selectedProvider: InjectedWalletProvider) {
@@ -760,9 +848,9 @@
         <WalletCards size={16} /><span>{walletAddress ? shortAddress(walletAddress) : 'Connect wallet'}</span>
       </button>
       {#if member}
-        <button class="account-button" type="button" onclick={signOut} title="Sign out of paper league"><UserRound size={16} /><span>{member.displayName}</span></button>
+        <button class="account-button" type="button" onclick={signOut} title="Sign out of paper league"><UserRound size={16} /><span>{member.username ? `@${member.username}` : member.displayName}</span></button>
       {:else}
-        <button class="join-button" type="button" onclick={() => (showJoin = true)}><LogIn size={16} /> Create desk</button>
+        <button class="join-button" type="button" onclick={() => (showJoin = true)}><LogIn size={16} /> Sign in / Create desk</button>
       {/if}
     </div>
   </header>
@@ -1122,20 +1210,38 @@
 {/if}
 
 <Tutorial open={showTutorial} onclose={closeTutorial} onnavigate={navigateTutorial} />
-<WalletDialog open={showWallet} onclose={() => (showWallet = false)} onconnect={connectWallet} onwatch={watchWallet} />
+<WalletDialog
+  open={showWallet}
+  onclose={() => (showWallet = false)}
+  onconnect={connectWallet}
+  onexternal={connectExternalWallet}
+  onwatch={watchWallet}
+  {reownConfigured}
+/>
 
 {#if showJoin}
   <div class="modal-backdrop" role="presentation" onclick={(event) => { if (event.currentTarget === event.target) showJoin = false }}>
     <div class="join-modal" role="dialog" aria-modal="true" aria-labelledby="join-title">
-      <div class="modal-head"><div><span>PAPER LEAGUE ACCESS</span><h2 id="join-title">Create your paper desk</h2></div><button class="icon-button" type="button" onclick={() => (showJoin = false)} title="Close"><X size={18} /></button></div>
-      <p>Name the workspace that will hold your practice balance, wallet snapshot, trading limits, rounds, and receipts on this device.</p>
+      <div class="modal-head"><div><span>PLAYER IDENTITY</span><h2 id="join-title">Sign in, then create your desk</h2></div><button class="icon-button" type="button" onclick={() => (showJoin = false)} title="Close"><X size={18} /></button></div>
+      <p>Your Farcaster identity owns the desk. Wallets remain optional and are attached afterward for read-only portfolio simulation.</p>
+      <div class="identity-entry">
+        <FarcasterIdentity identity={farcasterIdentity} oncomplete={setFarcasterIdentity} />
+        <div class="identity-divider"><span>OR</span></div>
+        {#if emailIdentityAddress}
+          <div class="email-identity"><Mail size={17} /><span><strong>Email account connected</strong><small>{shortAddress(emailIdentityAddress)} embedded account</small></span><Check size={16} /></div>
+        {:else}
+          <button class="email-login" type="button" onclick={() => void startEmailIdentity()}><Mail size={17} /><span><strong>Continue with email</strong><small>Passwordless OTP through Reown</small></span></button>
+        {/if}
+        {#if !reownConfigured}<div class="email-activation">Email login is integrated but needs the production Reown project ID to activate.</div>{/if}
+      </div>
       <form onsubmit={(event) => { event.preventDefault(); joinLeague() }}>
-        <label><span>Display name</span><input bind:value={displayName} autocomplete="name" placeholder="Your name" /></label>
+        <div class="desk-step"><span>02</span><div><strong>Name the desk</strong><small>This appears in player battles and receipts.</small></div></div>
+        {#if !farcasterIdentity}<label><span>Display name</span><input bind:value={displayName} autocomplete="name" placeholder="Your name" /></label>{/if}
         <label><span>Paper desk</span><input bind:value={teamName} placeholder="Your team or research desk" /></label>
         {#if joinError}<div class="form-error">{joinError}</div>{/if}
-        <button class="join-submit" type="submit"><Gauge size={17} /> Open paper desk</button>
+        <button class="join-submit" type="submit" disabled={!farcasterIdentity && !emailIdentityAddress}><Gauge size={17} /> Create desk and choose wallet</button>
       </form>
-      <div class="modal-boundaries"><span><ShieldCheck size={14} />Wallet optional</span><span><LockKeyhole size={14} />Local profile</span><span><RotateCcw size={14} />Reset anytime</span></div>
+      <div class="modal-boundaries"><span><ShieldCheck size={14} />Verified identity</span><span><LockKeyhole size={14} />Wallet optional</span><span><RotateCcw size={14} />Reset anytime</span></div>
     </div>
   </div>
 {/if}
