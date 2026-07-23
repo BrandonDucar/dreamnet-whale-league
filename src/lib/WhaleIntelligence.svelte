@@ -419,7 +419,6 @@
   .dna-bars strong { color: var(--text); }
   .dna-bars i { height: 5px; overflow: hidden; background: #242630; }
   .dna-bars b { display: block; height: 100%; background: var(--hot); }
-  .activity-tape .panel-label { min-height: 31px; }
   .active-trades-section { border-bottom: 1px solid var(--line); background: #07090f; }
   .active-trades-section .panel-label { padding: 9px 12px; background: #0c1017; }
   .activity-table { display: flex; flex-direction: column; }
@@ -431,14 +430,6 @@
   .market-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow: hidden; }
   .market-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--cyan); }
   .market-info small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #8a909a; font-size: 8px; }
-  .activity-tape > a { min-height: 43px; display: grid; grid-template-columns: 36px minmax(0, 1fr) 70px; align-items: center; gap: 8px; padding: 5px 12px; border-bottom: 1px solid #1d1e25; color: var(--text); }
-  .activity-tape > a > span:first-child { color: var(--green); font: 800 7px/1 'IBM Plex Mono', monospace; }
-  .activity-tape > a > span:first-child.trade-sell { color: var(--red); }
-  .activity-tape > a > span:nth-child(2), .activity-tape > a > span:last-child { min-width: 0; display: grid; gap: 4px; }
-  .activity-tape > a > span:last-child { text-align: right; }
-  .activity-tape strong, .activity-tape small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .activity-tape strong { font-size: 8px; }
-  .activity-tape small { color: #686d77; font: 600 7px/1 'IBM Plex Mono', monospace; }
   .method-note { min-height: 39px; display: flex; align-items: center; gap: 6px; padding: 7px 12px; color: #777d86; font: 600 7px/1.4 'IBM Plex Mono', monospace; }
   .method-note :global(svg) { flex: 0 0 auto; color: var(--green); }
   .loading-state, .error-state { min-height: 180px; display: grid; place-content: center; justify-items: center; gap: 8px; padding: 20px; color: #747b83; text-align: center; font-size: 10px; }
