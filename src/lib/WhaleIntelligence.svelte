@@ -266,26 +266,48 @@
               <div><span>AVG TICKET</span><strong>{money(dna.averageTicket, true)}</strong><small>median {money(dna.medianTicket, true)}</small></div>
               <div><span>TRADE PACE</span><strong>{dna.tradesPerHour.toFixed(1)}/h</strong><small>{dna.sampledHours.toFixed(1)}h sample</small></div>
             </div>
+
+            <!-- VISUAL ALLOCATION BREAKDOWN -->
             <div class="dna-bars">
-              <div><span>Buy share <strong>{percent(dna.buyShare)}</strong></span><i><b style={`width:${dna.buyShare * 100}%`}></b></i></div>
-              <div><span>Longshot price band <strong>{percent(dna.longshotShare)}</strong></span><i><b style={`width:${dna.longshotShare * 100}%`}></b></i></div>
-              <div><span>Favorite price band <strong>{percent(dna.favoriteShare)}</strong></span><i><b style={`width:${dna.favoriteShare * 100}%`}></b></i></div>
-              <div><span>Top-market concentration <strong>{percent(dna.topMarketShare)}</strong></span><i><b style={`width:${dna.topMarketShare * 100}%`}></b></i></div>
+              <div><span>Buy vs Sell Ratio <strong>{percent(dna.buyShare)} Buy</strong></span><i><b style={`width:${dna.buyShare * 100}%`}></b></i></div>
+              <div><span>Longshot Price Band (&lt;25c) <strong>{percent(dna.longshotShare)}</strong></span><i><b style={`width:${dna.longshotShare * 100}%`}></b></i></div>
+              <div><span>Favorite Price Band (&gt;75c) <strong>{percent(dna.favoriteShare)}</strong></span><i><b style={`width:${dna.favoriteShare * 100}%`}></b></i></div>
+              <div><span>Top-Market Concentration <strong>{percent(dna.topMarketShare)}</strong></span><i><b style={`width:${dna.topMarketShare * 100}%`}></b></i></div>
             </div>
-            <div class="activity-tape">
-              <div class="panel-label"><span>RECENT PUBLIC ACTIVITY</span><strong>{activity.length ? 'LIVE SAMPLE' : 'NO ROWS'}</strong></div>
-              {#each activity.slice(0, 5) as trade}
-                <a href={`https://polymarket.com/event/${trade.eventSlug || trade.slug}`} target="_blank" rel="noreferrer">
-                  <span class:trade-sell={trade.side === 'SELL'}>{trade.side}</span>
-                  <span><strong>{trade.outcome || 'Position'}</strong><small>{trade.title}</small></span>
-                  <span><strong>{money(trade.usdcSize, true)}</strong><small>{relativeTime(trade.timestamp)}</small></span>
-                </a>
-              {/each}
-            </div>
+
+            <!-- LIVE POSITIONS & TRADES TABLE RIGHT NOW -->
+            {#if activity.length}
+              <div class="active-trades-section">
+                <div class="panel-label">
+                  <span>CURRENT POSITIONS &amp; OPEN TRADES RIGHT NOW</span>
+                  <strong>{activity.length} DISCLOSED ROWS</strong>
+                </div>
+                <div class="activity-table">
+                  <div class="table-head">
+                    <span>ACTION</span>
+                    <span>OUTCOME / MARKET</span>
+                    <span>SIZE (USDC)</span>
+                    <span>TIMESTAMP</span>
+                  </div>
+                  {#each activity.slice(0, 8) as trade}
+                    <a class="table-row-link" href={`https://polymarket.com/event/${trade.eventSlug || trade.slug}`} target="_blank" rel="noreferrer">
+                      <div><span class="side-badge" class:sell={trade.side === 'SELL'}>{trade.side}</span></div>
+                      <div class="market-info">
+                        <strong>{trade.outcome || 'Position'}</strong>
+                        <small>{trade.title}</small>
+                      </div>
+                      <div><strong>{money(trade.usdcSize, true)}</strong></div>
+                      <div><small>{relativeTime(trade.timestamp)}</small></div>
+                    </a>
+                  {/each}
+                </div>
+              </div>
+            {/if}
+
             <div class="method-note"><ShieldCheck size={13} />Behavior labels describe this visible sample only. They do not establish identity, intent, insider status, win rate, or future performance.</div>
           {/if}
         {:else}
-          <div class="loading-state"><Target size={20} /> Select a public profile to inspect.</div>
+          <div class="loading-state"><Target size={20} /> Select a public profile to inspect live positions and charts.</div>
         {/if}
       </div>
     </div>
@@ -398,6 +420,17 @@
   .dna-bars i { height: 5px; overflow: hidden; background: #242630; }
   .dna-bars b { display: block; height: 100%; background: var(--hot); }
   .activity-tape .panel-label { min-height: 31px; }
+  .active-trades-section { border-bottom: 1px solid var(--line); background: #07090f; }
+  .active-trades-section .panel-label { padding: 9px 12px; background: #0c1017; }
+  .activity-table { display: flex; flex-direction: column; }
+  .activity-table .table-head { display: grid; grid-template-columns: 60px 1fr 90px 75px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: #0f1520; color: var(--muted); font: 700 7px/1 'IBM Plex Mono', monospace; }
+  .table-row-link { display: grid; grid-template-columns: 60px 1fr 90px 75px; align-items: center; padding: 8px 12px; border-bottom: 1px solid #1a2230; color: var(--text); text-decoration: none; font: 600 9px/1 'IBM Plex Mono', monospace; }
+  .table-row-link:hover { background: #131b29; }
+  .side-badge { padding: 3px 6px; border-radius: 2px; background: #064e3b; color: #34d399; font: 800 7px/1 'IBM Plex Mono', monospace; }
+  .side-badge.sell { background: #7f1d1d; color: #fca5a5; }
+  .market-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow: hidden; }
+  .market-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--cyan); }
+  .market-info small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #8a909a; font-size: 8px; }
   .activity-tape > a { min-height: 43px; display: grid; grid-template-columns: 36px minmax(0, 1fr) 70px; align-items: center; gap: 8px; padding: 5px 12px; border-bottom: 1px solid #1d1e25; color: var(--text); }
   .activity-tape > a > span:first-child { color: var(--green); font: 800 7px/1 'IBM Plex Mono', monospace; }
   .activity-tape > a > span:first-child.trade-sell { color: var(--red); }

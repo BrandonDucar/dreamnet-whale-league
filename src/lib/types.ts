@@ -24,6 +24,22 @@ export type TraderSourceKind = 'sec-13f' | 'official-research' | 'onchain-wallet
 export type TraderVerification = 'SEC FILED' | 'OFFICIAL SOURCE' | 'ONCHAIN PUBLIC' | 'USER SUPPLIED'
 export type TraderFollowMode = 'observe' | 'alerts' | 'paper-copy'
 
+export type TraderPositionItem = {
+  assetSymbol: string
+  assetName: string
+  direction: 'LONG' | 'SHORT' | 'HOLD' | 'ACCUMULATE'
+  allocationPct: number
+  entryPriceUsd?: number
+  currentPriceUsd?: number
+  pnlPct?: number
+  valueUsd?: number
+}
+
+export type TraderPerformancePoint = {
+  date: string
+  returnPct: number
+}
+
 export type TraderTemplate = {
   id: string
   name: string
@@ -42,6 +58,11 @@ export type TraderTemplate = {
   userAdded?: boolean
   visibility?: 'private' | 'public' | 'paid'
   monthlyPriceUsd?: number
+  winRatePct?: number
+  totalReturn30d?: number
+  activePositions?: TraderPositionItem[]
+  performanceCurve?: TraderPerformancePoint[]
+  assetAllocation?: Array<{ name: string; percentage: number; color: string }>
 }
 
 export type Member = {
