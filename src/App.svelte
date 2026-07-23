@@ -122,7 +122,7 @@
       latestReceipt = receipts[0] ?? null
     }
     if (savedOrders) paperOrders = JSON.parse(savedOrders) as PaperOrder[]
-    if (localStorage.getItem('whale-tutorial-complete') !== '1') showTutorial = true
+    if (!localStorage.getItem('whale-guided-tour-v2')) showTutorial = true
 
     const wallet = getInjectedWallet()
     const onAccountsChanged = (value: unknown) => {
@@ -246,9 +246,9 @@
     localStorage.setItem('whale-player-battle-receipts-v2', JSON.stringify(receipts))
   }
 
-  function closeTutorial() {
+  function closeTutorial(completed: boolean) {
     showTutorial = false
-    localStorage.setItem('whale-tutorial-complete', '1')
+    localStorage.setItem('whale-guided-tour-v2', completed ? 'completed' : 'dismissed')
   }
 
   async function sha256(value: string) {
@@ -482,7 +482,7 @@
         <div><span>DATA</span><strong>{dataStatus === 'live' ? 'PUBLIC LIVE' : 'DEMO'}</strong></div>
       </section>
 
-      <section class="order-lab">
+      <section class="order-lab" id="execution">
         <div class="rail-heading"><span>EXECUTION LAB</span><span>PAPER ONLY</span></div>
         <div class="ticket-modes">
           <button type="button" class:active={ticketMode === 'trade'} onclick={() => (ticketMode = 'trade')}><BarChart3 size={13} /> TRADE</button>
@@ -568,7 +568,7 @@
         </div>
       </section>
 
-      <section class="receipt-section">
+      <section class="receipt-section" id="receipts">
         <div class="rail-heading"><span>RECEIPT LEDGER</span><span>{receipts.length}</span></div>
         {#if latestReceipt}
           <div class="receipt-preview">

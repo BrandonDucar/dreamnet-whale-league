@@ -10,7 +10,7 @@ The first release contains one clearly disclosed simulation agent, **DOW JONES**
 - Displays interactive price history using TradingView Lightweight Charts.
 - Shows a public order-book depth ladder when the selected pair is available.
 - Runs local player-versus-player paper matches where each trader chooses a market, direction, and playbook against the same clock.
-- Includes a disclosed DOW JONES practice opponent and a first-run walkthrough that remains available from the top bar.
+- Includes a disclosed DOW JONES practice opponent and a seven-step guided product tour that scrolls to and highlights each working area without dismissing itself between steps.
 - Supports market, limit, stop, bracket, and TWAP paper-order workflows.
 - Produces cross-network paper swap quotes with fee, impact, and slippage visibility.
 - Lets a real person join locally with a display name and paper desk.

@@ -1,129 +1,252 @@
 <script lang="ts">
-  import { BarChart3, ChevronLeft, ChevronRight, FileCheck2, LayoutGrid, Radar, ShieldCheck, Swords, WalletCards, X } from '@lucide/svelte'
+  import { BarChart3, ChevronLeft, ChevronRight, FileCheck2, LayoutGrid, Radar, ShieldCheck, Swords, UserRound, WalletCards, X } from '@lucide/svelte'
+  import { onMount, tick } from 'svelte'
 
   export let open = false
-  export let onclose: () => void
+  export let onclose: (completed: boolean) => void
+
+  type Spotlight = { top: number; left: number; width: number; height: number; visible: boolean }
 
   const steps = [
     {
-      title: 'Read the market',
+      title: 'Start with the market map',
       label: 'MARKET MAP',
       target: '#market',
       icon: LayoutGrid,
-      body: 'Select any bubble to load its price, chart, depth, order ticket, and current AI teaching setup.',
-      action: 'Open market map',
+      body: 'This is the fastest way into the desk. Bubble size shows market cap or volume; color shows the selected performance window.',
+      action: 'Tap a bubble. That market becomes the active symbol everywhere else in the app.',
     },
     {
-      title: 'Set up your desk',
-      label: 'PORTFOLIO',
+      title: 'Build your trading boundary',
+      label: 'YOUR DESK',
       target: '#portfolio',
       icon: WalletCards,
-      body: 'Connect read-only to verify the wallet and its native balance, then set your goal, risk limits, time horizon, and automation preference. Broader token and venue coverage is labeled as it comes online.',
-      action: 'Open setup',
+      body: 'Connect a wallet read-only to verify its address and native balance, then choose your experience, goal, risk, time horizon, and limits.',
+      action: 'Complete the profile and press Build paper plan. Broader holdings coverage stays labeled BUILDING until its adapters are live.',
     },
     {
-      title: 'Choose intelligence',
-      label: 'TRADER SOURCES',
+      title: 'Choose who informs you',
+      label: 'INTELLIGENCE',
       target: '#traders',
       icon: Radar,
-      body: 'Follow verified filings, official research, public onchain accounts, or add a trader source you want to study.',
-      action: 'View traders',
+      body: 'Switch between traditional-market sources, public onchain accounts, and sources you add yourself. These are research inputs, not invented live traders.',
+      action: 'Open a source link before following it, then choose Follow only when it belongs in your research desk.',
     },
     {
-      title: 'Challenge another trader',
+      title: 'Enter a player match',
       label: 'PLAYER ARENA',
       target: '#arena',
       icon: Swords,
-      body: 'On the local desk, Player 1 and Player 2 each choose a market, direction, and playbook. Both trade the same clock; the stronger directional return wins.',
-      action: 'Open arena',
+      body: 'Join the league, then choose Local 2P for two people at one desk or Practice for the disclosed DOW JONES simulation opponent.',
+      action: 'Each side chooses a market, long or short direction, playbook, stake, and round length. Best directional return wins.',
     },
     {
-      title: 'Practice before money moves',
-      label: 'EXECUTION LAB',
-      target: '#signals',
+      title: 'Read price and liquidity',
+      label: 'CHART + DEPTH',
+      target: '#chart',
       icon: BarChart3,
-      body: 'Place paper market, limit, stop, bracket, and TWAP orders. DOW JONES is the one disclosed simulation opponent and teaching agent.',
-      action: 'Open execution lab',
+      body: 'The selected bubble drives this price chart and public order-book ladder. Change the history range before committing to a thesis.',
+      action: 'Compare the chart structure with the bid and ask depth. Teaching data is labeled whenever a live source is unavailable.',
     },
     {
-      title: 'Verify the result',
+      title: 'Rehearse the execution',
+      label: 'PAPER ORDERS',
+      target: '#execution',
+      icon: ShieldCheck,
+      body: 'Use the execution lab for paper market, limit, stop, bracket, TWAP, and swap workflows. It records intent without signing or moving money.',
+      action: 'Choose an order type, inspect every field, then place the paper order. Funds moved remains $0 in this release.',
+    },
+    {
+      title: 'Verify what happened',
       label: 'RECEIPTS',
-      target: '#ledger',
+      target: '#receipts',
       icon: FileCheck2,
-      body: 'Every completed match records both players, their positions, returns, winner, data mode, and a SHA-256 receipt. Live execution will add mandatory alerts.',
-      action: 'Open ledger',
+      body: 'Completed matches create a SHA-256 receipt with both players, positions, returns, winner, timing, and the market-data mode used.',
+      action: 'Use the ledger to confirm the result and copy its hash. A receipt is evidence of the paper run, not a live trade claim.',
     },
   ]
 
   let stepIndex = 0
-  $: step = steps[stepIndex]
+  let presentedKey = ''
+  let settleTimer: ReturnType<typeof setTimeout> | null = null
+  let spotlight: Spotlight = { top: 0, left: 0, width: 0, height: 0, visible: false }
 
-  function jumpToStep() {
-    window.location.hash = step.target
-    onclose()
+  $: step = steps[stepIndex]
+  $: nextStep = steps[stepIndex + 1]
+  $: panelLeft = step.target === '#execution' || step.target === '#receipts'
+  $: if (open) {
+    const key = `${stepIndex}:${step.target}`
+    if (key !== presentedKey) {
+      presentedKey = key
+      void presentStep()
+    }
+  } else {
+    presentedKey = ''
+    spotlight = { ...spotlight, visible: false }
+  }
+
+  onMount(() => {
+    const update = () => { if (open) updateSpotlight() }
+    const handleKeydown = (event: KeyboardEvent) => {
+      if (open && event.key === 'Escape') dismiss()
+    }
+    window.addEventListener('resize', update)
+    window.addEventListener('scroll', update, true)
+    window.addEventListener('keydown', handleKeydown)
+    return () => {
+      window.removeEventListener('resize', update)
+      window.removeEventListener('scroll', update, true)
+      window.removeEventListener('keydown', handleKeydown)
+      if (settleTimer) clearTimeout(settleTimer)
+    }
+  })
+
+  async function presentStep() {
+    await tick()
+    const target = document.querySelector<HTMLElement>(step.target)
+    if (!target) {
+      spotlight = { ...spotlight, visible: false }
+      return
+    }
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const rect = target.getBoundingClientRect()
+    const block = rect.height > window.innerHeight * 0.72 ? 'start' : 'center'
+    target.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block })
+    updateSpotlight()
+    if (settleTimer) clearTimeout(settleTimer)
+    settleTimer = setTimeout(updateSpotlight, reducedMotion ? 0 : 420)
+  }
+
+  function updateSpotlight() {
+    const target = document.querySelector<HTMLElement>(step.target)
+    if (!target) return
+    const rect = target.getBoundingClientRect()
+    const padding = 7
+    const left = Math.max(7, rect.left - padding)
+    const top = Math.max(7, rect.top - padding)
+    spotlight = {
+      left,
+      top,
+      width: Math.max(0, Math.min(window.innerWidth - left - 7, rect.width + padding * 2)),
+      height: Math.max(0, Math.min(window.innerHeight - top - 7, rect.height + padding * 2)),
+      visible: rect.bottom > 0 && rect.top < window.innerHeight,
+    }
+  }
+
+  function goTo(index: number) {
+    stepIndex = Math.max(0, Math.min(steps.length - 1, index))
+  }
+
+  function dismiss() {
+    stepIndex = 0
+    onclose(false)
   }
 
   function finish() {
     stepIndex = 0
-    onclose()
+    onclose(true)
   }
 </script>
 
 {#if open}
-  <div class="tutorial-backdrop" role="presentation" onclick={(event) => { if (event.currentTarget === event.target) finish() }}>
-    <div class="tutorial-modal" role="dialog" aria-modal="true" aria-labelledby="tutorial-title">
-      <div class="tutorial-top">
-        <span><ShieldCheck size={14} /> WHALE DESK WALKTHROUGH</span>
-        <button type="button" onclick={finish} title="Close tutorial"><X size={17} /></button>
-      </div>
-      <div class="tutorial-progress" aria-label={`Tutorial step ${stepIndex + 1} of ${steps.length}`}>
-        {#each steps as tutorialStep, index}<button type="button" class:active={index === stepIndex} class:complete={index < stepIndex} onclick={() => (stepIndex = index)} title={tutorialStep.label}>{index + 1}</button>{/each}
-      </div>
-      <div class="tutorial-body">
-        <svelte:component this={step.icon} size={28} />
-        <span>{step.label} / {String(stepIndex + 1).padStart(2, '0')}</span>
-        <h2 id="tutorial-title">{step.title}</h2>
-        <p>{step.body}</p>
-        <button class="tutorial-jump" type="button" onclick={jumpToStep}>{step.action}<ChevronRight size={14} /></button>
-      </div>
-      <div class="tutorial-actions">
-        <button type="button" onclick={() => (stepIndex = Math.max(0, stepIndex - 1))} disabled={stepIndex === 0}><ChevronLeft size={14} /> Back</button>
-        <span>{stepIndex + 1} / {steps.length}</span>
-        {#if stepIndex < steps.length - 1}
-          <button class="next-button" type="button" onclick={() => (stepIndex += 1)}>Next <ChevronRight size={14} /></button>
-        {:else}
-          <button class="next-button" type="button" onclick={finish}>Enter the desk <ChevronRight size={14} /></button>
-        {/if}
-      </div>
+  {#if spotlight.visible}
+    <div class="tour-shade shade-top" style={`height:${spotlight.top}px`} aria-hidden="true"></div>
+    <div class="tour-shade shade-left" style={`top:${spotlight.top}px;width:${spotlight.left}px;height:${spotlight.height}px`} aria-hidden="true"></div>
+    <div class="tour-shade shade-right" style={`top:${spotlight.top}px;left:${spotlight.left + spotlight.width}px;height:${spotlight.height}px`} aria-hidden="true"></div>
+    <div class="tour-shade shade-bottom" style={`top:${spotlight.top + spotlight.height}px`} aria-hidden="true"></div>
+    <div
+      class="spotlight-frame"
+      style={`top:${spotlight.top}px;left:${spotlight.left}px;width:${spotlight.width}px;height:${spotlight.height}px`}
+      aria-hidden="true"
+    ><span>{String(stepIndex + 1).padStart(2, '0')} / {step.label}</span></div>
+  {/if}
+
+  <div
+    class="tutorial-modal"
+    class:panel-left={panelLeft}
+    role="dialog"
+    aria-labelledby="tutorial-title"
+    aria-describedby="tutorial-description"
+    aria-live="polite"
+    data-step-index={stepIndex}
+  >
+    <div class="tutorial-top">
+      <span><ShieldCheck size={14} /> GUIDED DESK TOUR</span>
+      <button type="button" onclick={dismiss} title="End tour" aria-label="End tour" data-testid="tutorial-close"><X size={17} /></button>
+    </div>
+
+    <div class="tutorial-progress" aria-label={`Tutorial step ${stepIndex + 1} of ${steps.length}`}>
+      {#each steps as tutorialStep, index}
+        <button
+          type="button"
+          class:active={index === stepIndex}
+          class:complete={index < stepIndex}
+          onclick={() => goTo(index)}
+          title={tutorialStep.label}
+          aria-label={`Go to step ${index + 1}: ${tutorialStep.label}`}
+        >{index + 1}</button>
+      {/each}
+    </div>
+
+    <div class="tutorial-body">
+      <div class="step-identity"><span class="step-icon"><svelte:component this={step.icon} size={20} /></span><span>{step.label}<small>{stepIndex + 1} OF {steps.length}</small></span></div>
+      <h2 id="tutorial-title">{step.title}</h2>
+      <p id="tutorial-description">{step.body}</p>
+      <div class="step-action"><UserRound size={15} /><span><strong>WHAT TO DO</strong>{step.action}</span></div>
+    </div>
+
+    <div class="tutorial-actions">
+      <button type="button" onclick={() => goTo(stepIndex - 1)} disabled={stepIndex === 0} data-testid="tutorial-back"><ChevronLeft size={14} /> Back</button>
+      {#if nextStep}
+        <button class="next-button" type="button" onclick={() => goTo(stepIndex + 1)} data-testid="tutorial-next">Next: {nextStep.label} <ChevronRight size={14} /></button>
+      {:else}
+        <button class="next-button" type="button" onclick={finish} data-testid="tutorial-finish">Finish tour <ChevronRight size={14} /></button>
+      {/if}
     </div>
   </div>
 {/if}
 
 <style>
-  .tutorial-backdrop { position: fixed; inset: 0; z-index: 150; display: grid; place-items: center; padding: 18px; background: rgba(2, 3, 6, .88); }
-  .tutorial-modal { width: min(520px, 100%); border: 1px solid #4a435a; border-radius: 6px; background: #0c0a13; box-shadow: 0 28px 90px rgba(0,0,0,.75); }
-  .tutorial-top { min-height: 50px; display: flex; align-items: center; justify-content: space-between; padding: 0 13px; border-bottom: 1px solid var(--line); }
+  .tour-shade { position: fixed; z-index: 139; background: rgba(2, 3, 6, .78); pointer-events: none; }
+  .shade-top { inset: 0 0 auto; }
+  .shade-left { left: 0; }
+  .shade-right { right: 0; }
+  .shade-bottom { right: 0; bottom: 0; left: 0; }
+  .spotlight-frame { position: fixed; z-index: 140; border: 2px solid var(--hot); border-radius: 5px; box-shadow: 0 0 24px rgba(255, 47, 146, .3); pointer-events: none; transition: top .3s ease, left .3s ease, width .3s ease, height .3s ease; }
+  .spotlight-frame span { position: absolute; top: -23px; left: -2px; height: 21px; display: flex; align-items: center; padding: 0 7px; border: 1px solid var(--hot); background: var(--hot); color: #19020d; white-space: nowrap; font: 800 7px/1 'IBM Plex Mono', monospace; }
+  .tutorial-modal { position: fixed; right: 8px; bottom: 18px; z-index: 150; width: min(350px, calc(100vw - 36px)); border: 1px solid #55435f; border-radius: 6px; background: #0c0a13; box-shadow: 0 24px 80px rgba(0,0,0,.76); }
+  .tutorial-modal.panel-left { right: auto; left: 72px; }
+  .tutorial-top { min-height: 43px; display: flex; align-items: center; justify-content: space-between; padding: 0 11px; border-bottom: 1px solid var(--line); }
   .tutorial-top > span { display: flex; align-items: center; gap: 6px; color: var(--green); font: 700 8px/1 'IBM Plex Mono', monospace; }
   .tutorial-top button { width: 29px; height: 29px; display: grid; place-items: center; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
-  .tutorial-progress { height: 38px; display: flex; align-items: center; justify-content: center; gap: 7px; border-bottom: 1px solid var(--line); background: #09080e; }
+  .tutorial-progress { min-height: 36px; display: flex; align-items: center; justify-content: center; gap: 7px; border-bottom: 1px solid var(--line); background: #09080e; }
   .tutorial-progress button { width: 23px; height: 23px; padding: 0; border: 1px solid #383342; border-radius: 50%; background: transparent; color: #746d7f; cursor: pointer; font: 700 8px/1 'IBM Plex Mono', monospace; }
   .tutorial-progress button.complete { border-color: #2c6b55; color: var(--green); }
   .tutorial-progress button.active { border-color: var(--hot); background: var(--hot); color: #19020d; }
-  .tutorial-body { min-height: 280px; display: grid; place-content: center; justify-items: center; padding: 30px 32px; text-align: center; }
-  .tutorial-body > :global(svg) { color: var(--cyan); }
-  .tutorial-body > span { margin-top: 15px; color: var(--cyan); font: 700 8px/1 'IBM Plex Mono', monospace; }
-  .tutorial-body h2 { margin: 9px 0; font-size: 24px; }
-  .tutorial-body p { max-width: 400px; margin: 0; color: #aaa4b3; font-size: 12px; line-height: 1.6; }
-  .tutorial-jump { min-height: 32px; margin-top: 17px; display: inline-flex; align-items: center; gap: 5px; padding: 0 10px; border: 1px solid #315f6b; background: #0b2026; color: var(--cyan); cursor: pointer; font: 700 8px/1 'IBM Plex Mono', monospace; }
-  .tutorial-actions { min-height: 52px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; padding: 0 12px; border-top: 1px solid var(--line); }
-  .tutorial-actions button { min-height: 30px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: 1px solid var(--line); background: #121019; color: var(--muted); cursor: pointer; font: 700 8px/1 'IBM Plex Mono', monospace; }
-  .tutorial-actions button:first-child { justify-self: start; min-width: 76px; }
-  .tutorial-actions button.next-button { justify-self: end; min-width: 96px; border-color: var(--hot); background: var(--hot); color: #19020d; }
+  .tutorial-body { min-height: 230px; padding: 22px 23px 19px; }
+  .step-identity { display: flex; align-items: center; gap: 9px; }
+  .step-icon { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid #285f6b; background: #0b2026; color: var(--cyan); }
+  .step-identity > span:last-child { display: grid; gap: 4px; color: var(--cyan); font: 800 8px/1 'IBM Plex Mono', monospace; }
+  .step-identity small { color: #6f6879; font: 700 7px/1 'IBM Plex Mono', monospace; }
+  .tutorial-body h2 { margin: 15px 0 8px; font-size: 21px; }
+  .tutorial-body > p { margin: 0; color: #aaa4b3; font-size: 11px; line-height: 1.55; }
+  .step-action { min-height: 53px; margin-top: 15px; display: grid; grid-template-columns: 20px 1fr; align-items: center; gap: 7px; padding: 8px 10px; border-left: 2px solid var(--lime); background: #11150c; color: #b8c0a4; }
+  .step-action > :global(svg) { color: var(--lime); }
+  .step-action span { display: grid; gap: 5px; font-size: 9px; line-height: 1.4; }
+  .step-action strong { color: var(--lime); font: 800 7px/1 'IBM Plex Mono', monospace; }
+  .tutorial-actions { min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 11px; border-top: 1px solid var(--line); }
+  .tutorial-actions button { min-height: 31px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 0 9px; border: 1px solid var(--line); background: #121019; color: var(--muted); cursor: pointer; font: 700 8px/1 'IBM Plex Mono', monospace; }
+  .tutorial-actions button.next-button { min-width: 150px; border-color: var(--hot); background: var(--hot); color: #19020d; }
   .tutorial-actions button:disabled { opacity: .35; cursor: not-allowed; }
-  .tutorial-actions > span { color: #6f6879; font: 700 8px/1 'IBM Plex Mono', monospace; }
 
-  @media (max-width: 520px) {
-    .tutorial-body { min-height: 270px; padding: 24px 20px; }
-    .tutorial-body h2 { font-size: 20px; }
+  @media (max-width: 760px) {
+    .tutorial-modal, .tutorial-modal.panel-left { right: 9px; bottom: 63px; left: 9px; width: auto; }
+    .tutorial-body { min-height: 215px; padding: 18px 18px 16px; }
+    .tutorial-body h2 { font-size: 18px; }
+    .spotlight-frame span { top: 0; left: 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .spotlight-frame { transition: none; }
   }
 </style>
