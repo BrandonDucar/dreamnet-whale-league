@@ -10,12 +10,16 @@ The first release contains one clearly disclosed simulation agent, **DOW JONES**
 - Displays interactive price history using TradingView Lightweight Charts.
 - Shows a public order-book depth ladder when the selected pair is available.
 - Runs local player-versus-player paper matches where each trader chooses a market, direction, and playbook against the same clock.
-- Includes a disclosed DOW JONES practice opponent and a seven-step guided product tour that scrolls to and highlights each working area without dismissing itself between steps.
-- Supports market, limit, stop, bracket, and TWAP paper-order workflows.
+- Separates Markets, My Desk, Research, Arena, Paper Trade, and Ledger into focused environments instead of one stacked dashboard.
+- Includes a disclosed DOW JONES practice opponent and an eight-step guided tour that moves through and highlights each environment without dismissing itself between steps.
+- Adds a live Whale Signal Lab using Polymarket's public APIs for category-aware leaderboards, sample-derived wallet behavior profiles, watchlists, recent activity, and market-genome research.
+- Copies a connected wallet's read-only native and indexed ERC-20 holdings into a local paper portfolio and adds exactly 500 FKUSDC.
+- Supports market, limit, stop, bracket, and TWAP paper-order workflows with live or clearly labeled fallback fee estimates.
+- Settles simulated buys, sells, gas, venue fees, slippage, holdings, and P/L in the local paper ledger while moving no live funds.
 - Produces cross-network paper swap quotes with fee, impact, and slippage visibility.
 - Lets a real person join locally with a display name and paper desk.
 - Produces SHA-256 receipts and keeps a local paper order ledger.
-- Connects an injected EVM wallet for public account and native-balance discovery without requesting signing authority.
+- Connects an injected EVM wallet for public account and current-chain holdings discovery without requesting signing authority.
 - Offers 20 source-linked research templates: 10 institutional/traditional sources and 10 public onchain profiles.
 - Lets users add a public trader, filing, profile, or wallet as a personal source.
 - Supports observe, alert, and paper-copy follow modes.
@@ -56,6 +60,7 @@ npm run qa:visual
 
 - Market snapshots and historical price series: CoinGecko public API.
 - Public market depth when available: Binance market-data-only API.
+- Read-only indexed EVM token balances when supported: [Blockscout](https://www.blockscout.com/).
 - Interactive financial chart rendering: [TradingView Lightweight Charts](https://www.tradingview.com/).
 - Traditional trader research: source-linked SEC filings and official investment research.
 - Onchain trader research: source-linked public Hyperliquid and Polymarket profiles.
@@ -65,6 +70,8 @@ npm run qa:visual
 - [Trader intelligence and Autopilot boundary](docs/TRADER_INTELLIGENCE_AND_AUTOPILOT.md)
 - [Open-source trading stack audit](docs/OPEN_SOURCE_TRADING_STACK_AUDIT.md)
 - [Postgres control-plane schema](db/001_trader_intelligence.sql)
+- [Adaptive market-intelligence roadmap](docs/ADAPTIVE_MARKET_INTELLIGENCE_ROADMAP.md)
+- [Market-intelligence schema](db/002_market_intelligence.sql)
 
 ## Product boundary
 
