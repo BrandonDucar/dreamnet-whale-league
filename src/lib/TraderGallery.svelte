@@ -24,6 +24,7 @@
   import type { TraderFollowMode, TraderMarket, TraderTemplate } from './types'
 
   export let walletAddress = ''
+  export let onseedpositions: ((trader: TraderTemplate) => void) | undefined = undefined
 
   let activeMarket: TraderMarket | 'mine' = 'traditional'
   let followedIds: string[] = []
@@ -98,7 +99,8 @@
   }
 
   function copyPositionsToDesk(trader: TraderTemplate) {
-    copyNotification = `Seeded positions from ${trader.name} into local paper strategy!`
+    onseedpositions?.(trader)
+    copyNotification = `Seeded active positions from ${trader.name} into your paper desk portfolio!`
     window.setTimeout(() => (copyNotification = ''), 4000)
   }
 

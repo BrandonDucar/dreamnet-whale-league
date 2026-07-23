@@ -556,6 +556,32 @@
     return true
   }
 
+  function handleSeedTraderPositions(trader: import('./lib/types').TraderTemplate) {
+    if (!trader.activePositions || !trader.activePositions.length) return
+    const seeded: PaperPosition[] = trader.activePositions.map((pos) => {
+      const asset = assets.find((a) => a.symbol === pos.assetSymbol)
+      const price = pos.entryPriceUsd ?? asset?.price ?? 100
+      const qty = pos.allocationPct ? Number(((paperBalance * (pos.allocationPct / 100)) / price).toFixed(6)) : 5
+      return {
+        id: `seeded-${trader.id}-${pos.assetSymbol}`,
+        assetId: asset?.id ?? pos.assetSymbol.toLowerCase(),
+        chainId: '0x2105',
+        chain: 'Base',
+        symbol: pos.assetSymbol,
+        name: pos.assetName,
+        initialQuantity: 0,
+        quantity: Math.max(0.1, qty),
+        averageCostUsd: price,
+        image: asset?.image ?? '',
+        source: 'seeded-trader',
+      }
+    })
+    const existingIds = new Set(seeded.map((s) => s.id))
+    paperPositions = [...seeded, ...paperPositions.filter((p) => !existingIds.has(p.id))]
+    persistPaperPortfolio()
+    walletNotice = `Seeded ${trader.name}'s ${seeded.length} active positions into your paper desk!`
+  }
+
   async function settlePaperSwap() {
     const normalizedChainId = walletChainId.toLowerCase() || '0x2105'
     const amountUsd = swapFromAmount * selectedAsset.price
@@ -1004,7 +1030,7 @@
         <button type="button" role="tab" aria-selected={researchView === 'whales'} class:active={researchView === 'whales'} onclick={() => (researchView = 'whales')}><Gauge size={14} /> Whale signal lab</button>
       </div>
       {#if researchView === 'sources'}
-        <TraderGallery {walletAddress} />
+        <TraderGallery {walletAddress} onseedpositions={handleSeedTraderPositions} />
       {:else}
         <WhaleIntelligence />
       {/if}
