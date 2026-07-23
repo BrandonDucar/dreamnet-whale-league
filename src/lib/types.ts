@@ -10,6 +10,7 @@ export type MarketAsset = {
   marketCap: number
   volume: number
   rank: number
+  assetType?: 'crypto' | 'stock'
 }
 
 export type MarketWindow = '1h' | '24h' | '7d'
