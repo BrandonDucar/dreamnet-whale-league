@@ -48,13 +48,53 @@ const baseCoreTokens: CoreToken[] = [
   { address: '0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca', decimals: 6, symbol: 'USDbC', name: 'USD Base Coin', marketAssetId: 'usd-base-coin' },
 ]
 
+const mainnetCoreTokens: CoreToken[] = [
+  { address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', decimals: 18, symbol: 'WETH', name: 'Wrapped Ether', marketAssetId: 'ethereum' },
+  { address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', decimals: 6, symbol: 'USDT', name: 'Tether USD', marketAssetId: 'tether' },
+  { address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', decimals: 6, symbol: 'USDC', name: 'USD Coin', marketAssetId: 'usd-coin' },
+  { address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', decimals: 8, symbol: 'WBTC', name: 'Wrapped BTC', marketAssetId: 'bitcoin' },
+  { address: '0x6B175474E89094C44Da98b954EedeAC495271d0F', decimals: 18, symbol: 'DAI', name: 'Dai Stablecoin', marketAssetId: 'dai' },
+  { address: '0x514910771AF9Ca656af840dff83E8264EcF986CA', decimals: 18, symbol: 'LINK', name: 'Chainlink', marketAssetId: 'chainlink' },
+  { address: '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984', decimals: 18, symbol: 'UNI', name: 'Uniswap', marketAssetId: 'uniswap' },
+  { address: '0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE', decimals: 18, symbol: 'SHIB', name: 'Shiba Inu', marketAssetId: 'shiba-inu' },
+  { address: '0x6982508145454Ce325dDbE47a25d4ec3d2311933', decimals: 18, symbol: 'PEPE', name: 'Pepe', marketAssetId: 'pepe' },
+]
+
+const arbitrumCoreTokens: CoreToken[] = [
+  { address: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1', decimals: 18, symbol: 'WETH', name: 'Wrapped Ether', marketAssetId: 'ethereum' },
+  { address: '0x912CE59144191C1204E64559FE8253a0e49E6548', decimals: 18, symbol: 'ARB', name: 'Arbitrum', marketAssetId: 'arbitrum' },
+  { address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', decimals: 6, symbol: 'USDC', name: 'USD Coin', marketAssetId: 'usd-coin' },
+  { address: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', decimals: 6, symbol: 'USDT', name: 'Tether USD', marketAssetId: 'tether' },
+  { address: '0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f', decimals: 8, symbol: 'WBTC', name: 'Wrapped BTC', marketAssetId: 'bitcoin' },
+]
+
+const optimismCoreTokens: CoreToken[] = [
+  { address: '0x4200000000000000000000000000000000000006', decimals: 18, symbol: 'WETH', name: 'Wrapped Ether', marketAssetId: 'ethereum' },
+  { address: '0x4200000000000000000000000000000000000042', decimals: 18, symbol: 'OP', name: 'Optimism', marketAssetId: 'optimism' },
+  { address: '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85', decimals: 6, symbol: 'USDC', name: 'USD Coin', marketAssetId: 'usd-coin' },
+  { address: '0x94b008aA00579c1307B0EF2c499aD98a8ce58e58', decimals: 6, symbol: 'USDT', name: 'Tether USD', marketAssetId: 'tether' },
+]
+
+const polygonCoreTokens: CoreToken[] = [
+  { address: '0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619', decimals: 18, symbol: 'WETH', name: 'Wrapped Ether', marketAssetId: 'ethereum' },
+  { address: '0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270', decimals: 18, symbol: 'WPOL', name: 'Wrapped POL', marketAssetId: 'matic-network' },
+  { address: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359', decimals: 6, symbol: 'USDC', name: 'USD Coin', marketAssetId: 'usd-coin' },
+  { address: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F', decimals: 6, symbol: 'USDT', name: 'Tether USD', marketAssetId: 'tether' },
+]
+
+const bscCoreTokens: CoreToken[] = [
+  { address: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c', decimals: 18, symbol: 'WBNB', name: 'Wrapped BNB', marketAssetId: 'binancecoin' },
+  { address: '0x55d398326f99059fF775485246999027B3197955', decimals: 18, symbol: 'USDT', name: 'Tether USD', marketAssetId: 'tether' },
+  { address: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', decimals: 18, symbol: 'USDC', name: 'USD Coin', marketAssetId: 'usd-coin' },
+]
+
 const chainConfig: Record<string, ChainConfig> = {
-  '0x1': { explorer: 'https://eth.blockscout.com', rpc: 'https://ethereum-rpc.publicnode.com', nativeSymbol: 'ETH', nativeAssetId: 'ethereum' },
+  '0x1': { explorer: 'https://eth.blockscout.com', rpc: 'https://ethereum-rpc.publicnode.com', nativeSymbol: 'ETH', nativeAssetId: 'ethereum', coreTokens: mainnetCoreTokens },
   '0x2105': { explorer: 'https://base.blockscout.com', rpc: 'https://mainnet.base.org', nativeSymbol: 'ETH', nativeAssetId: 'ethereum', coreTokens: baseCoreTokens },
-  '0xa': { explorer: 'https://optimism.blockscout.com', rpc: 'https://mainnet.optimism.io', nativeSymbol: 'ETH', nativeAssetId: 'ethereum' },
-  '0xa4b1': { explorer: 'https://arbitrum.blockscout.com', rpc: 'https://arb1.arbitrum.io/rpc', nativeSymbol: 'ETH', nativeAssetId: 'ethereum' },
-  '0x89': { explorer: 'https://polygon.blockscout.com', rpc: 'https://polygon-bor-rpc.publicnode.com', nativeSymbol: 'POL', nativeAssetId: 'matic-network' },
-  '0x38': { rpc: 'https://bsc-rpc.publicnode.com', nativeSymbol: 'BNB', nativeAssetId: 'binancecoin' },
+  '0xa': { explorer: 'https://optimism.blockscout.com', rpc: 'https://mainnet.optimism.io', nativeSymbol: 'ETH', nativeAssetId: 'ethereum', coreTokens: optimismCoreTokens },
+  '0xa4b1': { explorer: 'https://arbitrum.blockscout.com', rpc: 'https://arb1.arbitrum.io/rpc', nativeSymbol: 'ETH', nativeAssetId: 'ethereum', coreTokens: arbitrumCoreTokens },
+  '0x89': { explorer: 'https://polygon.blockscout.com', rpc: 'https://polygon-bor-rpc.publicnode.com', nativeSymbol: 'POL', nativeAssetId: 'matic-network', coreTokens: polygonCoreTokens },
+  '0x38': { rpc: 'https://bsc-rpc.publicnode.com', nativeSymbol: 'BNB', nativeAssetId: 'binancecoin', coreTokens: bscCoreTokens },
 }
 
 function finiteNumber(value: unknown, fallback = 0) {
@@ -232,11 +272,12 @@ export async function scanConnectedWallet(
     })
     .filter((holding): holding is WalletHolding => Boolean(holding))
 
-  const rpcHoldings = erc20Holdings.length
-    ? []
-    : await scanCoreTokens(address, normalizedChainId, config, assets, provider)
+  const rpcHoldings = await scanCoreTokens(address, normalizedChainId, config, assets, provider)
 
-  return [nativeHolding, ...erc20Holdings, ...rpcHoldings]
+  const existingKeys = new Set(erc20Holdings.map((h) => (h.contractAddress ? h.contractAddress.toLowerCase() : h.symbol.toUpperCase())))
+  const newRpcHoldings = rpcHoldings.filter((h) => !existingKeys.has(h.contractAddress ? h.contractAddress.toLowerCase() : h.symbol.toUpperCase()))
+
+  return [nativeHolding, ...erc20Holdings, ...newRpcHoldings]
     .filter((holding) => holding.quantity > 0)
     .sort((a, b) => b.valueUsd - a.valueUsd)
 }

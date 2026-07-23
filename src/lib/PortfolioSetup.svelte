@@ -22,6 +22,8 @@
 
   let nativeBalance: number | null = null
   let holdings: WalletHolding[] = []
+  let hideDust = true
+  let dustThreshold = 1.0
   let scanStatus: 'idle' | 'scanning' | 'complete' | 'error' = 'idle'
   let scanMessage = ''
   let experience: Experience = 'active'
@@ -33,6 +35,14 @@
   let maxPositionPct = 5
   let leverageCeiling = 1
   let generatedPlan = ''
+
+  $: displayedHoldings = holdings.filter((h) => {
+    if (!hideDust) return true
+    if (h.isNative) return true
+    return h.valueUsd >= dustThreshold
+  })
+
+  $: hiddenDustCount = holdings.length - displayedHoldings.length
 
   $: if (scanStatus !== 'scanning' && initialHoldings !== holdings) {
     holdings = initialHoldings
@@ -112,14 +122,24 @@
       {/if}
       {#if scanMessage}<p class:error-message={scanStatus === 'error'} class="scan-message">{scanMessage}</p>{/if}
       {#if holdings.length}
+        <div class="holding-header">
+          <span>HOLDINGS ({displayedHoldings.length} of {holdings.length})</span>
+          <label class="dust-toggle" title="Hide tokens worth less than $1.00 USD">
+            <input type="checkbox" bind:checked={hideDust} />
+            <span>Hide dust (&lt; $1.00)</span>
+          </label>
+        </div>
         <div class="holding-preview">
-          {#each holdings.slice(0, 6) as holding}
+          {#each displayedHoldings as holding}
             <div>
               <span>{#if holding.image}<img src={holding.image} alt="" />{/if}<strong>{holding.symbol}</strong><small>{holding.chain}</small></span>
               <span>{holding.quantity.toLocaleString(undefined, { maximumFractionDigits: 6 })}<small>${holding.valueUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}</small></span>
             </div>
           {/each}
         </div>
+        {#if hiddenDustCount > 0 && hideDust}
+          <p class="dust-note">{hiddenDustCount} dust token{hiddenDustCount === 1 ? '' : 's'} (&lt; $1.00) hidden</p>
+        {/if}
       {/if}
       <div class="coverage-line"><span>SCAN COVERAGE</span><span>CURRENT EVM NETWORK / NATIVE + INDEXED ERC-20 + RPC-VERIFIED CORE ASSETS</span><strong>READ ONLY · INDEXER WITH ONCHAIN RPC FALLBACK</strong></div>
     </section>
@@ -171,6 +191,10 @@
   .scan-button:disabled { opacity: .55; cursor: wait; }
   .scan-message { margin: 8px 0 0; color: #8e9a9f; font-size: 8px; line-height: 1.45; }
   .scan-message.error-message { color: var(--red); }
+  .holding-header { display: flex; align-items: center; justify-content: space-between; margin-top: 9px; font: 700 7px/1 'IBM Plex Mono', monospace; color: var(--muted); }
+  .dust-toggle { display: flex; align-items: center; gap: 5px; cursor: pointer; color: var(--cyan); font-size: 8px; user-select: none; }
+  .dust-toggle input { cursor: pointer; accent-color: var(--cyan); }
+  .dust-note { margin: 5px 0 0; color: #78858a; font: 600 8px/1 'IBM Plex Mono', monospace; text-align: right; }
   .coverage-line { min-height: 38px; display: grid; grid-template-columns: 1fr; gap: 4px; margin-top: 9px; padding: 7px 8px; border-left: 2px solid var(--amber); background: #16130c; font: 600 7px/1.25 'IBM Plex Mono', monospace; }
   .coverage-line span:first-child { color: var(--amber); }
   .coverage-line span:nth-child(2) { color: var(--muted); }
