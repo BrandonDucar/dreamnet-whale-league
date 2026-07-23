@@ -41,7 +41,52 @@ async function seedPaperWallet(page) {
         source: 'wallet-snapshot',
       }],
     }))
+    localStorage.setItem('whale-league-member', JSON.stringify({
+      id: 'member-qa',
+      displayName: 'Brandon',
+      teamName: 'Ghostmint Research',
+      joinedAt: Date.now(),
+      authMethod: 'farcaster',
+      fid: 12345,
+      username: 'ghostmintops',
+    }))
   })
+}
+
+async function captureOnboarding() {
+  const page = await browser.newPage({ viewport: { width: 1120, height: 900 }, deviceScaleFactor: 1 })
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.addInitScript(() => localStorage.setItem('whale-guided-tour-v3', 'complete'))
+  await page.goto(baseUrl, { waitUntil: 'domcontentloaded' })
+  await page.getByRole('button', { name: /Sign in \/ Create desk/i }).click()
+  await page.waitForSelector('.join-modal')
+  const farcasterPrimaryCount = await page.getByRole('button', { name: /Continue with Farcaster/i }).count()
+  const emailFallbackCount = await page.getByRole('button', { name: /Continue with email/i }).count()
+  const deskInputCount = await page.getByPlaceholder('Your team or research desk').count()
+  const createDeskDisabled = await page.getByRole('button', { name: /Create desk and choose wallet/i }).isDisabled()
+  await page.screenshot({ path: path.join(outputDir, '00-onboarding-farcaster-first.png'), fullPage: false })
+  await page.getByTitle('Close').click()
+
+  await page.getByRole('button', { name: /Attach wallet/i }).first().click()
+  await page.waitForSelector('.wallet-dialog')
+  const walletLabels = await page.locator('.preferred-wallets strong').allTextContents()
+  const walletConnectCount = await page.getByRole('button', { name: /WalletConnect/i }).count()
+  const walletEmailCount = await page.locator('.wallet-dialog').getByRole('button', { name: /Continue with email/i }).count()
+  await page.screenshot({ path: path.join(outputDir, '00d-wallet-choice-order.png'), fullPage: false })
+  await page.close()
+  return {
+    metrics: {
+      farcasterPrimaryCount,
+      emailFallbackCount,
+      deskInputCount,
+      createDeskDisabled,
+      walletLabels,
+      walletConnectCount,
+      walletEmailCount,
+    },
+    errors,
+  }
 }
 
 async function captureDesktop() {
@@ -81,10 +126,7 @@ async function captureDesktop() {
 
   const bubbleCount = await page.locator('.market-bubble').count()
   await page.getByRole('button', { name: /Solana/ }).first().click()
-  await page.getByRole('button', { name: /Create desk/i }).click()
-  await page.getByPlaceholder('Your name').fill('Brandon')
-  await page.getByPlaceholder('Your team or research desk').fill('Ghostmint Research')
-  await page.getByRole('button', { name: /Open paper desk/i }).click()
+  await page.getByRole('button', { name: /My Desk/i }).first().click()
   await page.waitForSelector('#desk-home')
   const activeDeskTitle = await page.locator('#desk-home-title').textContent()
   const activeEnvironmentTitle = await page.locator('.environment-banner h1').textContent()
@@ -155,14 +197,24 @@ async function captureMobile() {
   return { metrics, errors }
 }
 
+const onboarding = await captureOnboarding()
 const desktop = await captureDesktop()
 const mobile = await captureMobile()
 await browser.close()
 
-const result = { baseUrl, desktop, mobile }
+const result = { baseUrl, onboarding, desktop, mobile }
 console.log(JSON.stringify(result, null, 2))
 
-if (desktop.errors.length || mobile.errors.length) process.exitCode = 1
+if (onboarding.errors.length || desktop.errors.length || mobile.errors.length) process.exitCode = 1
+if (
+  onboarding.metrics.farcasterPrimaryCount !== 1
+  || onboarding.metrics.emailFallbackCount !== 1
+  || onboarding.metrics.deskInputCount !== 1
+  || !onboarding.metrics.createDeskDisabled
+  || onboarding.metrics.walletLabels.join('|') !== 'Phantom|MetaMask|Base'
+  || onboarding.metrics.walletConnectCount !== 1
+  || onboarding.metrics.walletEmailCount !== 1
+) process.exitCode = 1
 if (desktop.metrics.scrollWidth > desktop.metrics.viewportWidth || mobile.metrics.scrollWidth > mobile.metrics.viewportWidth) process.exitCode = 1
 if (desktop.metrics.marketCanvasCount < 1 || mobile.metrics.canvasCount < 1) process.exitCode = 1
 if (desktop.metrics.receiptCount < 1 || desktop.metrics.orderCount < 1) process.exitCode = 1

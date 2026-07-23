@@ -45,9 +45,13 @@ export type TraderTemplate = {
 }
 
 export type Member = {
+  authMethod?: 'email' | 'farcaster' | 'local'
   displayName: string
+  fid?: number
   teamName: string
   joinedAt: string
+  pfpUrl?: string
+  username?: string
 }
 
 export type ChartPoint = {

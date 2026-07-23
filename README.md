@@ -18,6 +18,8 @@ The first release contains one clearly disclosed simulation agent, **DOW JONES**
 - Settles simulated buys, sells, gas, venue fees, slippage, holdings, and P/L in the local paper ledger while moving no live funds.
 - Produces cross-network paper swap quotes with fee, impact, and slippage visibility.
 - Lets a real person join locally with a display name and paper desk.
+- Makes verified Farcaster sign-in the primary desk-creation path, with passwordless email as a fallback.
+- Pins Phantom, MetaMask, and Base at the top of the post-sign-in wallet chooser, followed by WalletConnect and watch-only public addresses.
 - Produces SHA-256 receipts and keeps a local paper order ledger.
 - Connects an injected EVM wallet for public account and current-chain holdings discovery without requesting signing authority.
 - Offers 20 source-linked research templates: 10 institutional/traditional sources and 10 public onchain profiles.
@@ -47,6 +49,20 @@ npm run dev
 ```
 
 Open the local URL printed by Vite.
+
+## Identity and wallet setup
+
+Farcaster sign-in uses Sign In With Farcaster and verifies the signed message before creating a local paper desk. It does not require a Farcaster API key.
+
+Installed Phantom, MetaMask, Base, and other EIP-6963 wallets can connect directly in read-only mode. WalletConnect, mobile QR connections, and passwordless email accounts use Reown AppKit:
+
+```bash
+Copy-Item .env.example .env.local
+```
+
+Set `VITE_REOWN_PROJECT_ID` to the public project identifier from the [Reown dashboard](https://dashboard.reown.com). Add both the local development origin and `https://dreamnet-whale-league.pages.dev` to that project's allowed domains. The identifier is public configuration, not a wallet private key or signing secret.
+
+During the paper beta, wallet connections request only the public account address and balances. The app does not request transaction signatures or live trading authority.
 
 ## Verify
 
