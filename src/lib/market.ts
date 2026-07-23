@@ -208,7 +208,7 @@ export async function fetchChart(asset: MarketAsset, days: number): Promise<Char
   }
 }
 
-export function buildOrderBook(asset: MarketAsset): { bids: OrderBookLevel[]; asks: OrderBookLevel[] } {
+export function buildFallbackBook(asset: MarketAsset): { bids: OrderBookLevel[]; asks: OrderBookLevel[] } {
   const currentPrice = asset.price
   const spreadPercent = 0.0008
   const bestBid = currentPrice * (1 - spreadPercent)
@@ -216,27 +216,31 @@ export function buildOrderBook(asset: MarketAsset): { bids: OrderBookLevel[]; as
 
   const bids: OrderBookLevel[] = Array.from({ length: 8 }, (_, i) => {
     const price = bestBid * (1 - i * 0.0012)
-    const amount = (asset.marketCap / 1e11) * (1.5 + Math.sin(i * 1.7) * 0.8 + Math.random() * 0.5)
-    return { price, amount, total: 0 }
+    const size = (asset.marketCap / 1e11) * (1.5 + Math.sin(i * 1.7) * 0.8 + Math.random() * 0.5)
+    return { price, size, total: 0 }
   })
 
   const asks: OrderBookLevel[] = Array.from({ length: 8 }, (_, i) => {
     const price = bestAsk * (1 + i * 0.0012)
-    const amount = (asset.marketCap / 1e11) * (1.5 + Math.cos(i * 1.7) * 0.8 + Math.random() * 0.5)
-    return { price, amount, total: 0 }
+    const size = (asset.marketCap / 1e11) * (1.5 + Math.cos(i * 1.7) * 0.8 + Math.random() * 0.5)
+    return { price, size, total: 0 }
   })
 
   let bidSum = 0
   for (const b of bids) {
-    bidSum += b.amount
+    bidSum += b.size
     b.total = bidSum
   }
 
   let askSum = 0
   for (const a of asks) {
-    askSum += a.amount
+    askSum += a.size
     a.total = askSum
   }
 
   return { bids, asks }
+}
+
+export async function fetchOrderBook(asset: MarketAsset): Promise<{ bids: OrderBookLevel[]; asks: OrderBookLevel[] }> {
+  return buildFallbackBook(asset)
 }
