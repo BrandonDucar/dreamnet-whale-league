@@ -37,7 +37,10 @@
   import MarketBubbles from './lib/MarketBubbles.svelte'
   import MarketChart from './lib/MarketChart.svelte'
   import MarketDepth from './lib/MarketDepth.svelte'
+  import PortfolioSetup from './lib/PortfolioSetup.svelte'
+  import TraderGallery from './lib/TraderGallery.svelte'
   import { buildFallbackBook, buildFallbackChart, changeFor, fallbackAssets, fetchChart, fetchMarket, fetchOrderBook, formatPrice } from './lib/market'
+  import { chainName, connectInjectedWallet, getInjectedWallet, readInjectedWallet, shortAddress } from './lib/wallet'
   import type { BattleReceipt, BubbleMetric, ChartPoint, MarketAsset, MarketWindow, Member, OpenPosition, OrderBookLevel, PaperOrder, PaperOrderSide, PaperOrderType, PositionSide, Thesis } from './lib/types'
 
   type DataStatus = 'loading' | 'live' | 'fallback'
@@ -97,6 +100,9 @@
   let swapFromAmount = 0.1
   let swapNetwork = 'Base'
   let swapSlippage = 0.5
+  let walletAddress = ''
+  let walletChainId = ''
+  let walletNotice = ''
 
   $: selectedAsset = assets.find((asset) => asset.id === selectedAssetId) ?? assets[0]
   $: opponent = assets.find((asset) => asset.id === opponentId) ?? assets.find((asset) => asset.id !== selectedAssetId) ?? assets[1]
@@ -126,6 +132,23 @@
     }
     if (savedOrders) paperOrders = JSON.parse(savedOrders) as PaperOrder[]
 
+    const wallet = getInjectedWallet()
+    const onAccountsChanged = (value: unknown) => {
+      const accounts = Array.isArray(value) ? value as string[] : []
+      walletAddress = accounts[0] ?? ''
+      walletNotice = walletAddress ? `Wallet connected: ${shortAddress(walletAddress)}` : 'Wallet disconnected.'
+    }
+    const onChainChanged = (value: unknown) => {
+      walletChainId = typeof value === 'string' ? value : ''
+      walletNotice = walletChainId ? `Network changed to ${chainName(walletChainId)}.` : ''
+    }
+    void readInjectedWallet().then((connection) => {
+      walletAddress = connection.address
+      walletChainId = connection.chainId
+    }).catch(() => undefined)
+    wallet?.on?.('accountsChanged', onAccountsChanged)
+    wallet?.on?.('chainChanged', onChainChanged)
+
     void refreshMarket()
     void loadChart(selectedAsset)
     void loadDepth(selectedAsset)
@@ -141,6 +164,8 @@
       if (marketTimer) clearInterval(marketTimer)
       if (bookTimer) clearInterval(bookTimer)
       if (roundTimer) clearInterval(roundTimer)
+      wallet?.removeListener?.('accountsChanged', onAccountsChanged)
+      wallet?.removeListener?.('chainChanged', onChainChanged)
     }
   })
 
@@ -380,14 +405,25 @@
     localStorage.removeItem('whale-league-member')
   }
 
+  async function connectWallet() {
+    try {
+      const connection = await connectInjectedWallet()
+      walletAddress = connection.address
+      walletChainId = connection.chainId
+      walletNotice = `Connected ${shortAddress(walletAddress)} on ${chainName(walletChainId)}. Trading authority has not been granted.`
+    } catch (error) {
+      walletNotice = error instanceof Error ? error.message : 'Wallet connection failed.'
+    }
+  }
+
   function formatTimer(seconds: number) {
     return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
   }
 </script>
 
 <svelte:head>
-  <title>Whale Intelligence League | Live Paper Market Arena</title>
-  <meta name="description" content="Scan live crypto markets, compare assets head-to-head, and run receipted paper trading rounds with one disclosed AI teaching agent." />
+  <title>Whale Intelligence League | Trading Intelligence Arena</title>
+  <meta name="description" content="Explore live markets, follow source-linked traders, connect a wallet, and train inside a receipted trading intelligence arena." />
 </svelte:head>
 
 <div class="terminal-shell">
@@ -411,6 +447,9 @@
         <span></span>{dataStatus === 'live' ? 'LIVE FEED' : dataStatus === 'loading' ? 'SYNCING' : 'TEACHING FEED'}
       </span>
       <button class="icon-button desktop-only" type="button" title="Alerts"><Bell size={17} /></button>
+      <button class="wallet-button" class:connected={walletAddress} type="button" onclick={() => void connectWallet()} title={walletAddress ? `${walletAddress} on ${chainName(walletChainId)}` : 'Connect an injected EVM wallet'}>
+        <WalletCards size={16} /><span>{walletAddress ? shortAddress(walletAddress) : 'Connect wallet'}</span>
+      </button>
       {#if member}
         <button class="account-button" type="button" onclick={signOut} title="Sign out of paper league"><UserRound size={16} /><span>{member.displayName}</span></button>
       {:else}
@@ -434,6 +473,7 @@
   <div class="workspace">
     <nav class="tool-rail" aria-label="Trading workspace">
       <a class="active" href="#market" title="Market map"><LayoutGrid size={19} /><span>Market</span></a>
+      <a href="#portfolio" title="Portfolio and trader setup"><UserRound size={19} /><span>Setup</span></a>
       <a href="#arena" title="Paper arena"><Swords size={19} /><span>Arena</span></a>
       <a href="#chart" title="Chart"><BarChart3 size={19} /><span>Chart</span></a>
       <a href="#signals" title="AI signals"><Bot size={19} /><span>Signals</span></a>
@@ -462,6 +502,9 @@
         </div>
         <div class="market-legend"><span><i class="gain-dot"></i>Advancing</span><span><i class="loss-dot"></i>Declining</span><span>Bubble size: {bubbleMetric === 'marketCap' ? 'market cap' : '24h volume'}</span><span>{assets.length} instruments</span></div>
       </section>
+
+      <PortfolioSetup {walletAddress} {walletChainId} onconnect={() => void connectWallet()} />
+      <TraderGallery {walletAddress} />
 
       <section class="arena-panel" id="arena" aria-labelledby="arena-title">
         <div class="panel-toolbar arena-toolbar">
@@ -664,11 +707,15 @@
 
   <footer class="statusbar">
     <span><i class="status-light"></i>WHLE PAPER ENGINE ONLINE</span>
-    <span>PUBLIC MARKET DATA / NO BROKER</span>
+    <span>PUBLIC MARKET DATA / WALLET READ-ONLY</span>
     <span>ORDERS 0 LIVE / FUNDS $0.00</span>
     <span class="desktop-only">Educational simulation. Not financial advice.</span>
   </footer>
 </div>
+
+{#if walletNotice}
+  <button class="wallet-toast" type="button" onclick={() => (walletNotice = '')} title="Dismiss wallet notice"><ShieldCheck size={14} />{walletNotice}<X size={13} /></button>
+{/if}
 
 {#if showJoin}
   <div class="modal-backdrop" role="presentation" onclick={(event) => { if (event.currentTarget === event.target) showJoin = false }}>

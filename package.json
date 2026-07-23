@@ -2,7 +2,7 @@
   "name": "dreamnet-whale-league",
   "private": true,
   "version": "0.1.0",
-  "description": "A user-facing, receipt-driven paper market learning league.",
+  "description": "A user-facing trading intelligence arena with source-linked trader templates, portfolio planning, paper execution, and verifiable receipts.",
   "type": "module",
   "scripts": {
     "dev": "vite",

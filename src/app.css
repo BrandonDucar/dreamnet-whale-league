@@ -63,6 +63,8 @@ a { color: inherit; text-decoration: none; }
 .account-button, .join-button { min-height: 32px; display: inline-flex; align-items: center; gap: 7px; padding: 0 11px; border-radius: 3px; cursor: pointer; }
 .account-button { border: 1px solid var(--line); background: #11161a; }
 .join-button { border: 1px solid #8d43ff; background: #5624b6; color: #f4eaff; font-weight: 700; }
+.wallet-button { min-height: 32px; display: inline-flex; align-items: center; gap: 7px; padding: 0 10px; border: 1px solid #3d3652; border-radius: 3px; background: #171123; color: #d7c9ff; cursor: pointer; font: 700 9px/1 'IBM Plex Mono', monospace; }
+.wallet-button:hover, .wallet-button.connected { border-color: var(--cyan); color: var(--cyan); }
 
 .market-ticker { height: 31px; overflow: hidden; border-bottom: 1px solid var(--line); background: #080b0d; white-space: nowrap; }
 .ticker-track { display: flex; min-width: max-content; height: 100%; }
@@ -244,6 +246,8 @@ a { color: inherit; text-decoration: none; }
 .statusbar { height: 26px; position: sticky; bottom: 0; z-index: 25; display: flex; align-items: center; gap: 20px; padding: 0 12px 0 70px; border-top: 1px solid var(--line); background: #090d0f; color: #68747b; font: 600 8px/1 'IBM Plex Mono', monospace; }
 .statusbar span:last-child { margin-left: auto; }
 .status-light { display: inline-block; width: 6px; height: 6px; margin-right: 5px; border-radius: 50%; background: var(--green); }
+.wallet-toast { position: fixed; right: 14px; bottom: 39px; z-index: 120; max-width: min(460px, calc(100vw - 28px)); min-height: 38px; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid #446a80; border-radius: 4px; background: #0d1820; color: #caefff; box-shadow: 0 12px 32px rgba(0,0,0,.45); cursor: pointer; text-align: left; font: 600 9px/1.35 'IBM Plex Mono', monospace; }
+.wallet-toast svg:last-child { margin-left: auto; flex: 0 0 auto; }
 
 .modal-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 18px; background: rgba(2,4,5,.82); }
 .join-modal { width: min(440px, 100%); border: 1px solid var(--line-bright); border-radius: 5px; background: #0c1114; box-shadow: 0 24px 70px rgba(0,0,0,.65); }
@@ -279,11 +283,13 @@ a { color: inherit; text-decoration: none; }
   .mode-badge { display: none; }
   .feed-status { padding: 0 7px; }
   .account-button span { display: none; }
+  .wallet-button span { display: none; }
+  .wallet-button { width: 32px; padding: 0; justify-content: center; }
   .join-button { padding: 0 9px; }
   .market-ticker { height: 29px; overflow-x: auto; }
   .workspace { display: block; min-height: 0; }
   .market-workspace { border-right: 0; }
-  .tool-rail { position: fixed; top: auto; bottom: 0; left: 0; right: 0; width: 100%; height: 54px; display: grid; grid-template-columns: repeat(5, 1fr); padding: 0; border-top: 1px solid var(--line); border-right: 0; background: #090d0f; z-index: 80; }
+  .tool-rail { position: fixed; top: auto; bottom: 0; left: 0; right: 0; width: 100%; height: 54px; display: grid; grid-template-columns: repeat(6, 1fr); padding: 0; border-top: 1px solid var(--line); border-right: 0; background: #090d0f; z-index: 80; }
   .tool-rail a { width: 100%; height: 54px; border-left: 0; border-top: 2px solid transparent; }
   .tool-rail a:hover, .tool-rail a.active { border-left-color: transparent; border-top-color: var(--green); }
   .panel-toolbar { height: auto; min-height: 45px; flex-wrap: wrap; padding: 7px 8px; }
@@ -315,6 +321,7 @@ a { color: inherit; text-decoration: none; }
   .intelligence-rail { display: block; }
   .agent-brief, .league-section, .receipt-section { border-left: 0; }
   .statusbar { display: none; }
+  .wallet-toast { bottom: 66px; }
   .desktop-only { display: none !important; }
 }
 

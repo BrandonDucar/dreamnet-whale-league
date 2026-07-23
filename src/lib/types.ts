@@ -19,6 +19,31 @@ export type Thesis = 'momentum' | 'mean-reversion' | 'defensive'
 export type PaperOrderType = 'market' | 'limit' | 'stop' | 'bracket' | 'twap' | 'swap'
 export type PaperOrderSide = 'buy' | 'sell'
 
+export type TraderMarket = 'traditional' | 'crypto'
+export type TraderSourceKind = 'sec-13f' | 'official-research' | 'onchain-wallet' | 'leaderboard-profile' | 'user-source'
+export type TraderVerification = 'SEC FILED' | 'OFFICIAL SOURCE' | 'ONCHAIN PUBLIC' | 'USER SUPPLIED'
+export type TraderFollowMode = 'observe' | 'alerts' | 'paper-copy'
+
+export type TraderTemplate = {
+  id: string
+  name: string
+  operator: string
+  market: TraderMarket
+  sourceKind: TraderSourceKind
+  verification: TraderVerification
+  strategy: string
+  cadence: string
+  delay: string
+  description: string
+  sourceUrl: string
+  sourceLabel: string
+  identity?: string
+  snapshot?: string
+  userAdded?: boolean
+  visibility?: 'private' | 'public' | 'paid'
+  monthlyPriceUsd?: number
+}
+
 export type Member = {
   displayName: string
   teamName: string
