@@ -81,6 +81,54 @@ export type PaperOrder = {
   network?: string
   status: 'filled' | 'open' | 'scheduled' | 'cancelled'
   fundsMoved: 0
+  estimatedFeeUsd?: number
+  slippageBps?: number
+  settled?: boolean
+}
+
+export type WalletHolding = {
+  id: string
+  chainId: string
+  chain: string
+  symbol: string
+  name: string
+  quantity: number
+  priceUsd: number
+  valueUsd: number
+  image?: string
+  contractAddress?: string
+  isNative: boolean
+  tradeable: boolean
+  source: 'wallet-rpc' | 'blockscout'
+  observedAt: string
+}
+
+export type PaperPosition = {
+  id: string
+  assetId: string
+  chainId: string
+  chain: string
+  symbol: string
+  name: string
+  initialQuantity: number
+  quantity: number
+  averageCostUsd: number
+  image?: string
+  source: 'wallet-snapshot' | 'paper-trade'
+}
+
+export type PaperFeeQuote = {
+  chainId: string
+  gasPriceWei: string
+  gasUnits: number
+  nativeSymbol: string
+  nativePriceUsd: number
+  networkFeeUsd: number
+  venueFeeUsd: number
+  slippageBps: number
+  totalEstimatedCostUsd: number
+  mode: 'live' | 'fallback'
+  quotedAt: string
 }
 
 export type BattleReceipt = {

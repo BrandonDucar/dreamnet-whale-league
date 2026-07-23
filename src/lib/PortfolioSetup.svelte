@@ -1,11 +1,16 @@
 <script lang="ts">
   import { Bot, Check, ChevronRight, CircleDollarSign, Gauge, Radar, ShieldCheck, WalletCards } from '@lucide/svelte'
   import { onMount } from 'svelte'
-  import { chainName, readNativeBalance, shortAddress } from './wallet'
+  import { scanConnectedWallet } from './portfolio'
+  import type { MarketAsset, WalletHolding } from './types'
+  import { chainName, shortAddress } from './wallet'
 
   export let walletAddress = ''
   export let walletChainId = ''
+  export let assets: MarketAsset[] = []
+  export let initialHoldings: WalletHolding[] = []
   export let onconnect: () => void
+  export let onholdings: (holdings: WalletHolding[]) => void
 
   type Experience = 'new' | 'active' | 'advanced'
   type Goal = 'learn' | 'growth' | 'income' | 'preservation'
@@ -14,6 +19,7 @@
   type Automation = 'alerts' | 'supervised' | 'autopilot'
 
   let nativeBalance: number | null = null
+  let holdings: WalletHolding[] = []
   let scanStatus: 'idle' | 'scanning' | 'complete' | 'error' = 'idle'
   let scanMessage = ''
   let experience: Experience = 'active'
@@ -27,6 +33,8 @@
   let generatedPlan = ''
 
   onMount(() => {
+    holdings = initialHoldings
+    nativeBalance = holdings.find((holding) => holding.isNative)?.quantity ?? null
     try {
       const saved = localStorage.getItem('whale-risk-profile')
       if (!saved) return
@@ -53,9 +61,11 @@
     scanStatus = 'scanning'
     scanMessage = ''
     try {
-      nativeBalance = await readNativeBalance(walletAddress)
+      holdings = await scanConnectedWallet(walletAddress, walletChainId, assets)
+      nativeBalance = holdings.find((holding) => holding.isNative)?.quantity ?? 0
+      onholdings(holdings)
       scanStatus = 'complete'
-      scanMessage = 'Native balance verified through your wallet. Token, DeFi, Solana, and venue indexers are the next coverage adapters.'
+      scanMessage = `${holdings.length} holding${holdings.length === 1 ? '' : 's'} copied into your local paper portfolio. Your wallet remains read-only.`
     } catch (error) {
       scanStatus = 'error'
       scanMessage = error instanceof Error ? error.message : 'Portfolio scan failed.'
@@ -83,8 +93,8 @@
       {#if walletAddress}
         <div class="connected-wallet"><WalletCards size={18} /><div><strong>{shortAddress(walletAddress)}</strong><span>{chainName(walletChainId)}</span></div><Check size={16} /></div>
         <div class="balance-readout">
-          <span>NATIVE BALANCE</span>
-          <strong>{nativeBalance === null ? 'NOT SCANNED' : `${nativeBalance.toLocaleString(undefined, { maximumFractionDigits: 6 })}`}</strong>
+          <span>WALLET HOLDINGS</span>
+          <strong>{nativeBalance === null ? 'NOT SCANNED' : `$${holdings.reduce((sum, holding) => sum + holding.valueUsd, 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`}</strong>
         </div>
         <button type="button" class="scan-button" onclick={() => void scanPortfolio()} disabled={scanStatus === 'scanning'}><Radar size={15} />{scanStatus === 'scanning' ? 'Scanning...' : nativeBalance === null ? 'Analyze holdings' : 'Refresh holdings'}</button>
       {:else}
@@ -92,7 +102,17 @@
         <button type="button" class="scan-button" onclick={onconnect}><WalletCards size={15} /> Connect wallet</button>
       {/if}
       {#if scanMessage}<p class:error-message={scanStatus === 'error'} class="scan-message">{scanMessage}</p>{/if}
-      <div class="coverage-line"><span>EXPANDED COVERAGE</span><span>EVM TOKENS / DEFI / SOLANA / CEX / KALSHI</span><strong>BUILDING</strong></div>
+      {#if holdings.length}
+        <div class="holding-preview">
+          {#each holdings.slice(0, 6) as holding}
+            <div>
+              <span>{#if holding.image}<img src={holding.image} alt="" />{/if}<strong>{holding.symbol}</strong><small>{holding.chain}</small></span>
+              <span>{holding.quantity.toLocaleString(undefined, { maximumFractionDigits: 6 })}<small>${holding.valueUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}</small></span>
+            </div>
+          {/each}
+        </div>
+      {/if}
+      <div class="coverage-line"><span>SCAN COVERAGE</span><span>CURRENT EVM NETWORK / NATIVE + INDEXED ERC-20</span><strong>READ ONLY · <a href="https://www.blockscout.com/" target="_blank" rel="noreferrer">POWERED BY BLOCKSCOUT</a></strong></div>
     </section>
 
     <section class="risk-step">
@@ -146,6 +166,14 @@
   .coverage-line span:first-child { color: var(--amber); }
   .coverage-line span:nth-child(2) { color: var(--muted); }
   .coverage-line strong { color: var(--text); }
+  .coverage-line a { color: var(--cyan); }
+  .holding-preview { max-height: 208px; overflow-y: auto; margin-top: 8px; border: 1px solid var(--line); }
+  .holding-preview > div { min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 9px; border-bottom: 1px solid var(--line); }
+  .holding-preview > div:last-child { border-bottom: 0; }
+  .holding-preview span { display: flex; align-items: center; gap: 6px; font: 700 9px/1 'IBM Plex Mono', monospace; }
+  .holding-preview span:last-child { display: grid; justify-items: end; }
+  .holding-preview img { width: 20px; height: 20px; border-radius: 50%; }
+  .holding-preview small { color: var(--muted); font: 600 7px/1 'IBM Plex Mono', monospace; }
   .risk-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .risk-form label { display: grid; gap: 5px; }
   .risk-form label > span { color: var(--muted); font: 700 7px/1 'IBM Plex Mono', monospace; }

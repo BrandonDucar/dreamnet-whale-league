@@ -32,17 +32,21 @@
   } from '@lucide/svelte'
   import { onMount } from 'svelte'
   import MarketBubbles from './lib/MarketBubbles.svelte'
-  import MarketChart from './lib/MarketChart.svelte'
-  import MarketDepth from './lib/MarketDepth.svelte'
+  import MarketTerminal from './lib/MarketTerminal.svelte'
+  import PaperPortfolio from './lib/PaperPortfolio.svelte'
   import PortfolioSetup from './lib/PortfolioSetup.svelte'
   import PlayerArena from './lib/PlayerArena.svelte'
   import TraderGallery from './lib/TraderGallery.svelte'
   import Tutorial from './lib/Tutorial.svelte'
+  import WhaleIntelligence from './lib/WhaleIntelligence.svelte'
   import { buildFallbackBook, buildFallbackChart, changeFor, fallbackAssets, fetchChart, fetchMarket, fetchOrderBook, formatPrice } from './lib/market'
+  import { estimatePaperFee } from './lib/portfolio'
   import { chainName, connectInjectedWallet, getInjectedWallet, readInjectedWallet, shortAddress } from './lib/wallet'
-  import type { BattleReceipt, BubbleMetric, ChartPoint, MarketAsset, MarketWindow, Member, OrderBookLevel, PaperOrder, PaperOrderSide, PaperOrderType } from './lib/types'
+  import type { BattleReceipt, BubbleMetric, ChartPoint, MarketAsset, MarketWindow, Member, OrderBookLevel, PaperFeeQuote, PaperOrder, PaperOrderSide, PaperOrderType, PaperPosition, WalletHolding } from './lib/types'
 
   type DataStatus = 'loading' | 'live' | 'fallback'
+  type Environment = 'markets' | 'desk' | 'research' | 'arena' | 'execute' | 'ledger'
+  type ResearchView = 'sources' | 'whales'
   type Signal = {
     asset: MarketAsset
     label: 'BREAKOUT' | 'REVERSAL' | 'PRESSURE' | 'RANGE'
@@ -51,6 +55,15 @@
     thesis: string
     invalidation: string
   }
+
+  const environments: Array<{ id: Environment; label: string; task: string; icon: typeof LayoutGrid }> = [
+    { id: 'markets', label: 'Markets', task: 'Map + depth', icon: LayoutGrid },
+    { id: 'desk', label: 'My Desk', task: 'Wallet + limits', icon: UserRound },
+    { id: 'research', label: 'Research', task: 'Sources + whales', icon: Gauge },
+    { id: 'arena', label: 'Arena', task: 'Player battles', icon: Swords },
+    { id: 'execute', label: 'Paper Trade', task: 'Rehearse orders', icon: BarChart3 },
+    { id: 'ledger', label: 'Ledger', task: 'Receipts + history', icon: FileCheck2 },
+  ]
 
   let assets = fallbackAssets
   let dataStatus: DataStatus = 'loading'
@@ -71,7 +84,7 @@
   let displayName = ''
   let teamName = ''
   let joinError = ''
-  let paperBalance = 10_000
+  let paperBalance = 500
   let receipts: BattleReceipt[] = []
   let latestReceipt: BattleReceipt | null = null
   let copied = false
@@ -95,6 +108,13 @@
   let walletAddress = ''
   let walletChainId = ''
   let walletNotice = ''
+  let walletHoldings: WalletHolding[] = []
+  let paperPositions: PaperPosition[] = []
+  let paperStartingValue = 500
+  let portfolioWalletAddress = ''
+  let latestFeeQuote: PaperFeeQuote | null = null
+  let activeEnvironment: Environment = 'markets'
+  let researchView: ResearchView = 'sources'
 
   $: selectedAsset = assets.find((asset) => asset.id === selectedAssetId) ?? assets[0]
   $: marketChange = changeFor(selectedAsset, marketWindow)
@@ -111,23 +131,45 @@
   $: benchmarkSignal = signals[0]
   $: swapToAsset = assets.find((asset) => asset.id === swapToId) ?? assets.find((asset) => asset.symbol === 'USDC') ?? assets[1]
   $: swapQuote = swapToAsset.price > 0 ? (swapFromAmount * selectedAsset.price * 0.9982) / swapToAsset.price : 0
+  $: activeEnvironmentMeta = environments.find((environment) => environment.id === activeEnvironment) ?? environments[0]
 
   onMount(() => {
     const savedMember = localStorage.getItem('whale-league-member')
     const savedReceipts = localStorage.getItem('whale-player-battle-receipts-v2')
     const savedOrders = localStorage.getItem('whale-league-paper-orders')
+    const savedPortfolio = localStorage.getItem('whale-league-paper-portfolio-v1')
     if (savedMember) member = JSON.parse(savedMember) as Member
     if (savedReceipts) {
       receipts = JSON.parse(savedReceipts) as BattleReceipt[]
       latestReceipt = receipts[0] ?? null
     }
     if (savedOrders) paperOrders = JSON.parse(savedOrders) as PaperOrder[]
-    if (!localStorage.getItem('whale-guided-tour-v2')) showTutorial = true
+    if (savedPortfolio) {
+      try {
+        const snapshot = JSON.parse(savedPortfolio) as {
+          walletAddress?: string
+          cash?: number
+          startingValue?: number
+          holdings?: WalletHolding[]
+          positions?: PaperPosition[]
+        }
+        portfolioWalletAddress = snapshot.walletAddress ?? ''
+        paperBalance = Number.isFinite(snapshot.cash) ? Number(snapshot.cash) : 500
+        paperStartingValue = Number.isFinite(snapshot.startingValue) ? Number(snapshot.startingValue) : 500
+        walletHoldings = snapshot.holdings ?? []
+        paperPositions = snapshot.positions ?? []
+      } catch {
+        localStorage.removeItem('whale-league-paper-portfolio-v1')
+      }
+    }
+    if (!localStorage.getItem('whale-guided-tour-v3')) showTutorial = true
 
     const wallet = getInjectedWallet()
     const onAccountsChanged = (value: unknown) => {
       const accounts = Array.isArray(value) ? value as string[] : []
-      walletAddress = accounts[0] ?? ''
+      const nextAddress = accounts[0] ?? ''
+      syncPortfolioWallet(nextAddress)
+      walletAddress = nextAddress
       walletNotice = walletAddress ? `Wallet connected: ${shortAddress(walletAddress)}` : 'Wallet disconnected.'
     }
     const onChainChanged = (value: unknown) => {
@@ -135,6 +177,7 @@
       walletNotice = walletChainId ? `Network changed to ${chainName(walletChainId)}.` : ''
     }
     void readInjectedWallet().then((connection) => {
+      syncPortfolioWallet(connection.address)
       walletAddress = connection.address
       walletChainId = connection.chainId
     }).catch(() => undefined)
@@ -176,7 +219,7 @@
       const nextAssets = await fetchMarket()
       assets = nextAssets
       dataStatus = 'live'
-      processPaperOrders(nextAssets)
+      void processPaperOrders(nextAssets)
     } catch {
       assets = fallbackAssets
       dataStatus = 'fallback'
@@ -244,11 +287,236 @@
     receipts = [receipt, ...receipts].slice(0, 12)
     paperBalance = Number((paperBalance + receipt.hostHypotheticalPnl).toFixed(2))
     localStorage.setItem('whale-player-battle-receipts-v2', JSON.stringify(receipts))
+    persistPaperPortfolio()
   }
 
   function closeTutorial(completed: boolean) {
     showTutorial = false
-    localStorage.setItem('whale-guided-tour-v2', completed ? 'completed' : 'dismissed')
+    localStorage.setItem('whale-guided-tour-v3', completed ? 'completed' : 'dismissed')
+  }
+
+  function navigateEnvironment(environment: Environment) {
+    activeEnvironment = environment
+    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }))
+  }
+
+  function navigateTutorial(environment: Environment, view?: ResearchView) {
+    activeEnvironment = environment
+    if (view) researchView = view
+  }
+
+  function openTutorial() {
+    activeEnvironment = 'markets'
+    showTutorial = true
+  }
+
+  function persistPaperPortfolio() {
+    localStorage.setItem('whale-league-paper-portfolio-v1', JSON.stringify({
+      walletAddress: portfolioWalletAddress,
+      cash: paperBalance,
+      startingValue: paperStartingValue,
+      holdings: walletHoldings,
+      positions: paperPositions,
+      updatedAt: new Date().toISOString(),
+    }))
+  }
+
+  function syncPortfolioWallet(nextAddress: string) {
+    if (!nextAddress || !portfolioWalletAddress || nextAddress.toLowerCase() === portfolioWalletAddress.toLowerCase()) return
+    portfolioWalletAddress = nextAddress
+    walletHoldings = []
+    paperPositions = []
+    paperBalance = 500
+    paperStartingValue = 500
+    latestFeeQuote = null
+    persistPaperPortfolio()
+  }
+
+  function handleHoldings(holdings: WalletHolding[]) {
+    walletHoldings = holdings
+    portfolioWalletAddress = walletAddress
+    paperBalance = 500
+    paperPositions = holdings.map((holding) => {
+      const marketAsset = assets.find((asset) => asset.symbol.toUpperCase() === holding.symbol.toUpperCase())
+      return {
+        id: holding.id,
+        assetId: marketAsset?.id ?? holding.id,
+        chainId: holding.chainId,
+        chain: holding.chain,
+        symbol: holding.symbol,
+        name: holding.name,
+        initialQuantity: holding.quantity,
+        quantity: holding.quantity,
+        averageCostUsd: holding.priceUsd,
+        image: holding.image,
+        source: 'wallet-snapshot',
+      }
+    })
+    paperStartingValue = Number((500 + holdings.reduce((sum, holding) => sum + holding.valueUsd, 0)).toFixed(2))
+    persistPaperPortfolio()
+    walletNotice = `Paper portfolio reset from ${holdings.length} read-only holding${holdings.length === 1 ? '' : 's'} plus 500 FKUSDC.`
+  }
+
+  function livePositionPrice(position: PaperPosition) {
+    return assets.find((asset) => asset.id === position.assetId || asset.symbol === position.symbol)?.price ?? position.averageCostUsd
+  }
+
+  async function settlePaperTrade(asset: MarketAsset, side: PaperOrderSide, amountUsd: number) {
+    const normalizedChainId = walletChainId.toLowerCase() || '0x2105'
+    const nativePosition = paperPositions.find((position) => position.chainId === normalizedChainId && ['ETH', 'POL', 'BNB'].includes(position.symbol.toUpperCase()))
+    const nativeMarketAsset = assets.find((candidate) => candidate.symbol.toUpperCase() === nativePosition?.symbol.toUpperCase())
+      ?? assets.find((candidate) => candidate.symbol === 'ETH')
+    const quote = await estimatePaperFee({
+      chainId: normalizedChainId,
+      nativePriceUsd: nativeMarketAsset?.price ?? nativePosition?.averageCostUsd ?? 0,
+      action: 'trade',
+      amountUsd,
+    })
+    latestFeeQuote = quote
+
+    const slippageUsd = amountUsd * quote.slippageBps / 10_000
+    const cashFee = quote.venueFeeUsd + slippageUsd
+    const tradedQuantity = amountUsd / Math.max(asset.price, Number.EPSILON)
+    const existing = paperPositions.find((position) => position.assetId === asset.id || position.symbol === asset.symbol)
+    const gasQuantity = quote.networkFeeUsd > 0 && quote.nativePriceUsd > 0 ? quote.networkFeeUsd / quote.nativePriceUsd : 0
+
+    if (gasQuantity > 0) {
+      if (!nativePosition || quote.nativePriceUsd <= 0) {
+        walletNotice = `Paper order blocked: the ${chainName(normalizedChainId)} snapshot has no ${quote.nativeSymbol} available for simulated gas.`
+        return false
+      }
+      const requiredNative = gasQuantity + (side === 'sell' && existing?.id === nativePosition.id ? tradedQuantity : 0)
+      if (nativePosition.quantity < requiredNative) {
+        walletNotice = `Paper order blocked: simulated ${quote.nativeSymbol} is below the live gas estimate.`
+        return false
+      }
+    }
+
+    if (side === 'buy') {
+      const totalCash = amountUsd + cashFee
+      if (paperBalance < totalCash) {
+        walletNotice = `Paper order blocked: ${totalCash.toFixed(2)} FKUSDC is required after fees.`
+        return false
+      }
+      paperBalance = Number((paperBalance - totalCash).toFixed(6))
+      if (existing) {
+        const quantityAfterGas = existing.quantity - (existing.id === nativePosition?.id ? gasQuantity : 0)
+        const combinedQuantity = quantityAfterGas + tradedQuantity
+        const averageCostUsd = combinedQuantity > 0
+          ? (quantityAfterGas * existing.averageCostUsd + tradedQuantity * asset.price) / combinedQuantity
+          : asset.price
+        paperPositions = paperPositions.map((position) => {
+          if (position.id === existing.id) return { ...position, quantity: combinedQuantity, averageCostUsd }
+          if (position.id === nativePosition?.id) return { ...position, quantity: position.quantity - gasQuantity }
+          return position
+        })
+      } else {
+        paperPositions = [{
+          id: `paper:${asset.id}`,
+          assetId: asset.id,
+          chainId: normalizedChainId,
+          chain: chainName(normalizedChainId),
+          symbol: asset.symbol,
+          name: asset.name,
+          initialQuantity: 0,
+          quantity: tradedQuantity,
+          averageCostUsd: asset.price,
+          image: asset.image,
+          source: 'paper-trade',
+        }, ...paperPositions.map((position) => position.id === nativePosition?.id ? { ...position, quantity: position.quantity - gasQuantity } : position)]
+      }
+    } else {
+      if (!existing || existing.quantity < tradedQuantity) {
+        walletNotice = `Paper order blocked: the simulated portfolio does not hold enough ${asset.symbol}.`
+        return false
+      }
+      paperPositions = paperPositions.map((position) => {
+        let quantity = position.quantity
+        if (position.id === existing.id) quantity -= tradedQuantity
+        if (position.id === nativePosition?.id) quantity -= gasQuantity
+        return quantity === position.quantity ? position : { ...position, quantity }
+      })
+      paperBalance = Number((paperBalance + amountUsd - cashFee).toFixed(6))
+    }
+
+    persistPaperPortfolio()
+    walletNotice = `${side === 'buy' ? 'Bought' : 'Sold'} ${tradedQuantity.toLocaleString(undefined, { maximumFractionDigits: 6 })} ${asset.symbol} in paper mode. Live funds moved: $0.`
+    return true
+  }
+
+  async function settlePaperSwap() {
+    const normalizedChainId = walletChainId.toLowerCase() || '0x2105'
+    const amountUsd = swapFromAmount * selectedAsset.price
+    const nativePosition = paperPositions.find((position) => position.chainId === normalizedChainId && ['ETH', 'POL', 'BNB'].includes(position.symbol.toUpperCase()))
+    const nativeMarketAsset = assets.find((candidate) => candidate.symbol.toUpperCase() === nativePosition?.symbol.toUpperCase())
+      ?? assets.find((candidate) => candidate.symbol === 'ETH')
+    const quote = await estimatePaperFee({
+      chainId: normalizedChainId,
+      nativePriceUsd: nativeMarketAsset?.price ?? nativePosition?.averageCostUsd ?? 0,
+      action: 'swap',
+      amountUsd,
+    })
+    latestFeeQuote = quote
+
+    const gasQuantity = quote.networkFeeUsd > 0 && quote.nativePriceUsd > 0 ? quote.networkFeeUsd / quote.nativePriceUsd : 0
+    const sourceIsCash = selectedAsset.symbol === 'USDC'
+    const destinationIsCash = swapToAsset.symbol === 'USDC'
+    const sourcePosition = paperPositions.find((position) => position.assetId === selectedAsset.id || position.symbol === selectedAsset.symbol)
+    const requiredNative = gasQuantity + (!sourceIsCash && sourcePosition?.id === nativePosition?.id ? swapFromAmount : 0)
+
+    if (gasQuantity > 0 && (!nativePosition || nativePosition.quantity < requiredNative)) {
+      walletNotice = `Paper swap blocked: simulated ${quote.nativeSymbol} is below the live gas estimate.`
+      return false
+    }
+    if (sourceIsCash) {
+      if (paperBalance < amountUsd) {
+        walletNotice = 'Paper swap blocked: insufficient FKUSDC after estimated costs.'
+        return false
+      }
+    } else if (!sourcePosition || sourcePosition.quantity < swapFromAmount) {
+      walletNotice = `Paper swap blocked: the simulated portfolio does not hold enough ${selectedAsset.symbol}.`
+      return false
+    }
+
+    const netDestinationUsd = Math.max(0, amountUsd - quote.venueFeeUsd - amountUsd * quote.slippageBps / 10_000)
+    const destinationQuantity = netDestinationUsd / Math.max(swapToAsset.price, Number.EPSILON)
+    paperPositions = paperPositions.map((position) => {
+      let quantity = position.quantity
+      if (!sourceIsCash && position.id === sourcePosition?.id) quantity -= swapFromAmount
+      if (position.id === nativePosition?.id) quantity -= gasQuantity
+      return quantity === position.quantity ? position : { ...position, quantity }
+    })
+    if (sourceIsCash) paperBalance = Number((paperBalance - amountUsd).toFixed(6))
+    if (destinationIsCash) {
+      paperBalance = Number((paperBalance + netDestinationUsd).toFixed(6))
+    } else {
+      const destination = paperPositions.find((position) => position.assetId === swapToAsset.id || position.symbol === swapToAsset.symbol)
+      if (destination) {
+        const combinedQuantity = destination.quantity + destinationQuantity
+        const averageCostUsd = combinedQuantity > 0
+          ? (destination.quantity * destination.averageCostUsd + destinationQuantity * swapToAsset.price) / combinedQuantity
+          : swapToAsset.price
+        paperPositions = paperPositions.map((position) => position.id === destination.id ? { ...position, quantity: combinedQuantity, averageCostUsd } : position)
+      } else {
+        paperPositions = [{
+          id: `paper:${swapToAsset.id}`,
+          assetId: swapToAsset.id,
+          chainId: normalizedChainId,
+          chain: chainName(normalizedChainId),
+          symbol: swapToAsset.symbol,
+          name: swapToAsset.name,
+          initialQuantity: 0,
+          quantity: destinationQuantity,
+          averageCostUsd: swapToAsset.price,
+          image: swapToAsset.image,
+          source: 'paper-trade',
+        }, ...paperPositions]
+      }
+    }
+
+    persistPaperPortfolio()
+    walletNotice = `Swapped ${swapFromAmount.toLocaleString()} ${selectedAsset.symbol} into ${destinationQuantity.toLocaleString(undefined, { maximumFractionDigits: 6 })} ${swapToAsset.symbol} in paper mode.`
+    return true
   }
 
   async function sha256(value: string) {
@@ -270,6 +538,22 @@
       return
     }
     const status: PaperOrder['status'] = orderType === 'market' || orderType === 'bracket' ? 'filled' : orderType === 'twap' ? 'scheduled' : 'open'
+    const amountUsd = Math.max(25, Number(orderAmountUsd) || 25)
+    let feeQuote: PaperFeeQuote | null = null
+    if (status === 'filled') {
+      const settled = await settlePaperTrade(selectedAsset, orderSide, amountUsd)
+      if (!settled) return
+      feeQuote = latestFeeQuote
+    } else {
+      const nativeAsset = assets.find((asset) => asset.symbol === 'ETH')
+      feeQuote = await estimatePaperFee({
+        chainId: walletChainId.toLowerCase() || '0x2105',
+        nativePriceUsd: nativeAsset?.price ?? 0,
+        action: 'trade',
+        amountUsd,
+      })
+      latestFeeQuote = feeQuote
+    }
     const unsigned: Omit<PaperOrder, 'hash'> = {
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
@@ -277,7 +561,7 @@
       assetId: selectedAsset.id,
       side: orderSide,
       type: orderType,
-      amountUsd: Math.max(25, Number(orderAmountUsd) || 25),
+      amountUsd,
       referencePrice: selectedAsset.price,
       limitPrice: orderType === 'limit' || orderType === 'bracket' || orderType === 'twap' ? Number(orderLimit) : undefined,
       stopPrice: orderType === 'stop' ? Number(orderStop) : undefined,
@@ -286,6 +570,9 @@
       durationMinutes: orderType === 'twap' ? Number(twapDuration) : undefined,
       status,
       fundsMoved: 0,
+      estimatedFeeUsd: feeQuote?.totalEstimatedCostUsd,
+      slippageBps: feeQuote?.slippageBps,
+      settled: status === 'filled',
     }
     const order = { ...unsigned, hash: await sha256(JSON.stringify(unsigned)) }
     paperOrders = [order, ...paperOrders].slice(0, 20)
@@ -297,6 +584,8 @@
       showJoin = true
       return
     }
+    const settled = await settlePaperSwap()
+    if (!settled) return
     const unsigned: Omit<PaperOrder, 'hash'> = {
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
@@ -311,25 +600,50 @@
       network: swapNetwork,
       status: 'filled',
       fundsMoved: 0,
+      estimatedFeeUsd: latestFeeQuote?.totalEstimatedCostUsd,
+      slippageBps: latestFeeQuote?.slippageBps,
+      settled: true,
     }
     const order = { ...unsigned, hash: await sha256(JSON.stringify(unsigned)) }
     paperOrders = [order, ...paperOrders].slice(0, 20)
     localStorage.setItem('whale-league-paper-orders', JSON.stringify(paperOrders))
   }
 
-  function processPaperOrders(nextAssets: MarketAsset[]) {
+  async function processPaperOrders(nextAssets: MarketAsset[]) {
     let changed = false
-    paperOrders = paperOrders.map((order) => {
-      if (order.status !== 'open') return order
+    const nextOrders: PaperOrder[] = []
+    for (const order of paperOrders) {
+      if (order.status !== 'open') {
+        nextOrders.push(order)
+        continue
+      }
       const asset = nextAssets.find((candidate) => candidate.id === order.assetId)
-      if (!asset) return order
+      if (!asset) {
+        nextOrders.push(order)
+        continue
+      }
       const limitTriggered = order.type === 'limit' && order.limitPrice !== undefined && (order.side === 'buy' ? asset.price <= order.limitPrice : asset.price >= order.limitPrice)
       const stopTriggered = order.type === 'stop' && order.stopPrice !== undefined && (order.side === 'buy' ? asset.price >= order.stopPrice : asset.price <= order.stopPrice)
-      if (!limitTriggered && !stopTriggered) return order
+      if (!limitTriggered && !stopTriggered) {
+        nextOrders.push(order)
+        continue
+      }
+      const settled = await settlePaperTrade(asset, order.side, order.amountUsd)
+      if (!settled) {
+        nextOrders.push(order)
+        continue
+      }
       changed = true
-      return { ...order, status: 'filled' }
-    })
-    if (changed) localStorage.setItem('whale-league-paper-orders', JSON.stringify(paperOrders))
+      nextOrders.push({
+        ...order,
+        status: 'filled',
+        settled: true,
+        estimatedFeeUsd: latestFeeQuote?.totalEstimatedCostUsd ?? order.estimatedFeeUsd,
+        slippageBps: latestFeeQuote?.slippageBps ?? order.slippageBps,
+      })
+    }
+    paperOrders = nextOrders
+    if (changed) localStorage.setItem('whale-league-paper-orders', JSON.stringify(nextOrders))
   }
 
   function cancelPaperOrder(id: string) {
@@ -345,6 +659,7 @@
   async function connectWallet() {
     try {
       const connection = await connectInjectedWallet()
+      syncPortfolioWallet(connection.address)
       walletAddress = connection.address
       walletChainId = connection.chainId
       walletNotice = `Connected ${shortAddress(walletAddress)} on ${chainName(walletChainId)}. Trading authority has not been granted.`
@@ -381,7 +696,7 @@
         <span></span>{dataStatus === 'live' ? 'LIVE FEED' : dataStatus === 'loading' ? 'SYNCING' : 'TEACHING FEED'}
       </span>
       <button class="icon-button desktop-only" type="button" title="Alerts"><Bell size={17} /></button>
-      <button class="icon-button" type="button" title="Open tutorial" aria-label="Open tutorial" onclick={() => (showTutorial = true)}><CircleHelp size={17} /></button>
+      <button class="guided-tour-button" type="button" onclick={openTutorial}><CircleHelp size={16} /><span>Guided tour</span></button>
       <button class="wallet-button" class:connected={walletAddress} type="button" onclick={() => void connectWallet()} title={walletAddress ? `${walletAddress} on ${chainName(walletChainId)}` : 'Connect an injected EVM wallet'}>
         <WalletCards size={16} /><span>{walletAddress ? shortAddress(walletAddress) : 'Connect wallet'}</span>
       </button>
@@ -405,17 +720,34 @@
     </div>
   </div>
 
-  <div class="workspace">
-    <nav class="tool-rail" aria-label="Trading workspace">
-      <a class="active" href="#market" title="Market map"><LayoutGrid size={19} /><span>Market</span></a>
-      <a href="#portfolio" title="Portfolio and trader setup"><UserRound size={19} /><span>Setup</span></a>
-      <a href="#arena" title="Paper arena"><Swords size={19} /><span>Arena</span></a>
-      <a href="#chart" title="Chart"><BarChart3 size={19} /><span>Chart</span></a>
-      <a href="#signals" title="AI signals"><Bot size={19} /><span>Signals</span></a>
-      <a href="#ledger" title="Receipt ledger"><FileCheck2 size={19} /><span>Ledger</span></a>
-    </nav>
+  <nav class="environment-nav" aria-label="Whale League environments">
+    {#each environments as environment}
+      <button
+        type="button"
+        class:active={activeEnvironment === environment.id}
+        aria-current={activeEnvironment === environment.id ? 'page' : undefined}
+        onclick={() => navigateEnvironment(environment.id)}
+      >
+        <span class="environment-icon"><svelte:component this={environment.icon} size={17} /></span>
+        <span><strong>{environment.label}</strong><small>{environment.task}</small></span>
+      </button>
+    {/each}
+  </nav>
+
+  <div class="environment-banner">
+    <div>
+      <span>ACTIVE ENVIRONMENT</span>
+      <h1>{activeEnvironmentMeta.label}</h1>
+    </div>
+    <p>{activeEnvironmentMeta.task}</p>
+    <button type="button" onclick={openTutorial}><CircleHelp size={15} /> Tour this workspace</button>
+  </div>
+  <div class="beta-banner"><ShieldCheck size={13} /><strong>Paper trading uses live market data and simulated settlement.</strong><span>Live-money trading will be available after beta testing.</span></div>
+
+  <div class:with-intelligence={activeEnvironment === 'execute'} class="workspace">
 
     <main class="market-workspace">
+      {#if activeEnvironment === 'markets'}
       <section class="market-panel" id="market" aria-labelledby="market-title">
         <div class="panel-toolbar">
           <div class="panel-title"><Radio size={15} /><strong id="market-title">MARKET PULSE</strong><span>{marketMood}</span></div>
@@ -437,10 +769,42 @@
         </div>
         <div class="market-legend"><span><i class="gain-dot"></i>Advancing</span><span><i class="loss-dot"></i>Declining</span><span>Bubble size: {bubbleMetric === 'marketCap' ? 'market cap' : '24h volume'}</span><span>{assets.length} instruments</span></div>
       </section>
+      <MarketTerminal
+        {selectedAsset}
+        {marketChange}
+        {chartDays}
+        {chartPoints}
+        {chartLoading}
+        {chartMode}
+        {bids}
+        {asks}
+        {bookStatus}
+        ondayschange={setChartDays}
+      />
 
-      <PortfolioSetup {walletAddress} {walletChainId} onconnect={() => void connectWallet()} />
-      <TraderGallery {walletAddress} />
+      {:else if activeEnvironment === 'desk'}
+      <PortfolioSetup {walletAddress} {walletChainId} {assets} initialHoldings={walletHoldings} onconnect={() => void connectWallet()} onholdings={handleHoldings} />
+      <PaperPortfolio
+        {walletAddress}
+        positions={paperPositions}
+        {assets}
+        fkUsdcBalance={paperBalance}
+        startingValue={paperStartingValue}
+        ontrade={() => navigateEnvironment('execute')}
+      />
 
+      {:else if activeEnvironment === 'research'}
+      <div class="research-switcher" role="tablist" aria-label="Research views">
+        <button type="button" role="tab" aria-selected={researchView === 'sources'} class:active={researchView === 'sources'} onclick={() => (researchView = 'sources')}><Radio size={14} /> Trader sources</button>
+        <button type="button" role="tab" aria-selected={researchView === 'whales'} class:active={researchView === 'whales'} onclick={() => (researchView = 'whales')}><Gauge size={14} /> Whale signal lab</button>
+      </div>
+      {#if researchView === 'sources'}
+        <TraderGallery {walletAddress} />
+      {:else}
+        <WhaleIntelligence />
+      {/if}
+
+      {:else if activeEnvironment === 'arena'}
       <PlayerArena
         {assets}
         {member}
@@ -452,24 +816,68 @@
         onreceipt={recordBattleReceipt}
       />
 
-      <section class="chart-panel" id="chart" aria-labelledby="chart-title">
-        <div class="chart-head">
-          <div class="instrument-title">
-            {#if selectedAsset.image}<img src={selectedAsset.image} alt="" />{/if}
-            <div><span>{selectedAsset.name}</span><strong id="chart-title">{selectedAsset.symbol} / U.S. DOLLAR</strong></div>
-          </div>
-          <div class="instrument-price"><strong>{formatPrice(selectedAsset.price)}</strong><span class:positive={marketChange >= 0} class:negative={marketChange < 0}>{marketChange >= 0 ? '+' : ''}{marketChange.toFixed(2)}%</span></div>
-          <div class="chart-ranges">{#each [1, 7, 30] as days}<button type="button" class:active={chartDays === days} onclick={() => setChartDays(days)}>{days === 1 ? '1D' : `${days}D`}</button>{/each}</div>
-          <span class="chart-source">{chartLoading ? 'LOADING' : chartMode === 'live' ? 'LIVE HISTORY' : 'TEACHING SERIES'}</span>
+      {:else if activeEnvironment === 'execute'}
+      <MarketTerminal
+        {selectedAsset}
+        {marketChange}
+        {chartDays}
+        {chartPoints}
+        {chartLoading}
+        {chartMode}
+        {bids}
+        {asks}
+        {bookStatus}
+        ondayschange={setChartDays}
+      />
+
+      {:else if activeEnvironment === 'ledger'}
+      <section class="ledger-workspace" id="receipts" aria-labelledby="ledger-title">
+        <div class="ledger-summary">
+          <div><span>PAPER BALANCE</span><strong>${paperBalance.toFixed(2)}</strong></div>
+          <div><span>BATTLE RECEIPTS</span><strong>{receipts.length}</strong></div>
+          <div><span>PAPER ORDERS</span><strong>{paperOrders.length}</strong></div>
+          <div><span>LIVE FUNDS MOVED</span><strong>$0.00</strong></div>
         </div>
-        <div class="chart-grid">
-          <div class="chart-body"><MarketChart points={chartPoints} positive={marketChange >= 0} /></div>
-          <div class="depth-wrap"><MarketDepth {bids} {asks} live={bookStatus === 'live'} /></div>
+        <div class="ledger-columns">
+          <section>
+            <div class="ledger-title"><FileCheck2 size={16} /><div><span>EVIDENCE</span><h2 id="ledger-title">Battle receipts</h2></div></div>
+            {#if receipts.length}
+              <div class="ledger-list">
+                {#each receipts as receipt}
+                  <article class="ledger-entry">
+                    <div><span>{receipt.hostName} vs {receipt.opponentName}</span><strong>{receipt.winnerName} won</strong></div>
+                    <p>{receipt.hostSymbol} {receipt.hostDirection.toUpperCase()} / {receipt.opponentSymbol} {receipt.opponentDirection.toUpperCase()}</p>
+                    <code>sha256:{receipt.hash.slice(0, 20)}...{receipt.hash.slice(-10)}</code>
+                  </article>
+                {/each}
+              </div>
+            {:else}
+              <div class="ledger-empty"><FileCheck2 size={22} /><strong>No completed battles yet</strong><span>Finish an Arena round to create the first local receipt.</span></div>
+            {/if}
+          </section>
+          <section>
+            <div class="ledger-title"><Layers3 size={16} /><div><span>ORDER HISTORY</span><h2>Paper orders</h2></div></div>
+            {#if paperOrders.length}
+              <div class="ledger-list">
+                {#each paperOrders as order}
+                  <article class="ledger-entry order-entry">
+                    <div><span>{order.symbol}{order.toSymbol ? ` → ${order.toSymbol}` : ''}</span><strong class:positive={order.status === 'filled'} class:negative={order.status === 'cancelled'}>{order.status.toUpperCase()}</strong></div>
+                    <p>{order.type.toUpperCase()} / {order.side.toUpperCase()} / ${order.amountUsd.toFixed(2)}{order.estimatedFeeUsd !== undefined ? ` / EST. COST $${order.estimatedFeeUsd.toFixed(4)}` : ''}</p>
+                    <code>sha256:{order.hash.slice(0, 20)}...{order.hash.slice(-10)}</code>
+                    {#if order.status === 'open' || order.status === 'scheduled'}<button type="button" onclick={() => cancelPaperOrder(order.id)}><X size={12} /> Cancel paper order</button>{/if}
+                  </article>
+                {/each}
+              </div>
+            {:else}
+              <div class="ledger-empty"><Layers3 size={22} /><strong>No paper orders yet</strong><span>Use Paper Trade to rehearse an order without moving funds.</span></div>
+            {/if}
+          </section>
         </div>
-        <div class="chart-foot"><span>Interactive price chart</span><span>Powered by <a href="https://www.tradingview.com/" target="_blank" rel="noreferrer">TradingView Lightweight Charts</a></span></div>
       </section>
+      {/if}
     </main>
 
+    {#if activeEnvironment === 'execute'}
     <aside class="intelligence-rail" id="signals" aria-labelledby="signals-title">
       <section class="steward-head">
         <div class="agent-id"><span class="agent-avatar">DJ</span><div><strong id="signals-title">DOW JONES</strong><small>AI PAPER STRATEGIST</small></div></div>
@@ -516,8 +924,14 @@
             {#if orderType === 'twap'}
               <label><span>DURATION</span><select bind:value={twapDuration}><option value={15}>15 minutes</option><option value={30}>30 minutes</option><option value={60}>1 hour</option><option value={240}>4 hours</option></select></label>
             {/if}
-            <div class="order-quote"><span>{selectedAsset.symbol} REF</span><strong>{formatPrice(selectedAsset.price)}</strong><span>FUNDS MOVED</span><strong>$0</strong></div>
-            <button class:paper-sell={orderSide === 'sell'} class="place-order" type="button" onclick={() => void placePaperOrder()}>{orderSide === 'buy' ? 'Place paper buy' : 'Place paper sell'}</button>
+            <div class="order-quote">
+              <span>{selectedAsset.symbol} LIVE REF</span><strong>{formatPrice(selectedAsset.price)}</strong>
+              <span>FKUSDC AVAILABLE</span><strong>${paperBalance.toFixed(2)}</strong>
+              <span>EST. NETWORK + VENUE</span><strong>{latestFeeQuote ? `$${latestFeeQuote.totalEstimatedCostUsd.toFixed(4)}` : 'QUOTED AT REVIEW'}</strong>
+              <span>FUNDS MOVED</span><strong>$0</strong>
+            </div>
+            <button class:paper-sell={orderSide === 'sell'} class="place-order" type="button" onclick={() => void placePaperOrder()}>{orderSide === 'buy' ? 'Simulate buy' : 'Simulate sell'}</button>
+            <div class="beta-trade-note"><ShieldCheck size={13} /><span>Live prices, simulated settlement. Live-money trading will be available after beta testing.</span></div>
           </div>
         {:else}
           <div class="swap-form">
@@ -597,6 +1011,7 @@
         {/if}
       </section>
     </aside>
+    {/if}
   </div>
 
   <footer class="statusbar">
@@ -611,7 +1026,7 @@
   <button class="wallet-toast" type="button" onclick={() => (walletNotice = '')} title="Dismiss wallet notice"><ShieldCheck size={14} />{walletNotice}<X size={13} /></button>
 {/if}
 
-<Tutorial open={showTutorial} onclose={closeTutorial} />
+<Tutorial open={showTutorial} onclose={closeTutorial} onnavigate={navigateTutorial} />
 
 {#if showJoin}
   <div class="modal-backdrop" role="presentation" onclick={(event) => { if (event.currentTarget === event.target) showJoin = false }}>
