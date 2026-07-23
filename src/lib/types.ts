@@ -14,7 +14,7 @@ export type MarketAsset = {
 
 export type MarketWindow = '1h' | '24h' | '7d'
 export type BubbleMetric = 'marketCap' | 'volume'
-export type PositionSide = 'left' | 'right'
+export type TradeDirection = 'long' | 'short'
 export type Thesis = 'momentum' | 'mean-reversion' | 'defensive'
 export type PaperOrderType = 'market' | 'limit' | 'stop' | 'bracket' | 'twap' | 'swap'
 export type PaperOrderSide = 'buy' | 'sell'
@@ -83,36 +83,27 @@ export type PaperOrder = {
   fundsMoved: 0
 }
 
-export type OpenPosition = {
-  id: string
-  openedAt: string
-  closesAt: number
-  side: PositionSide
-  leftId: string
-  rightId: string
-  leftEntry: number
-  rightEntry: number
-  paperStake: number
-  thesis: Thesis
-}
-
 export type BattleReceipt = {
   id: string
   hash: string
   openedAt: string
   closedAt: string
-  member: string
-  team: string
-  leftSymbol: string
-  rightSymbol: string
-  selectedSide: PositionSide
-  selectedSymbol: string
+  mode: 'players' | 'practice'
+  hostName: string
+  hostTeam: string
+  opponentName: string
+  hostSymbol: string
+  opponentSymbol: string
+  hostDirection: TradeDirection
+  opponentDirection: TradeDirection
   paperStake: number
-  thesis: Thesis
-  leftReturn: number
-  rightReturn: number
-  relativeEdge: number
-  hypotheticalPnl: number
+  hostThesis: Thesis
+  opponentThesis: Thesis
+  hostReturn: number
+  opponentReturn: number
+  winningMargin: number
+  winnerName: string
+  hostHypotheticalPnl: number
   fundsMoved: 0
   dataMode: 'live' | 'fallback'
 }

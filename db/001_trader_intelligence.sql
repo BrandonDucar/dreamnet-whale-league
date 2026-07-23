@@ -295,6 +295,74 @@ CREATE TABLE IF NOT EXISTS strategy_outcomes (
   UNIQUE (trader_template_id, user_id, mode, window_start, window_end)
 );
 
+CREATE TABLE IF NOT EXISTS arena_challenges (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  challenge_code text NOT NULL UNIQUE,
+  host_user_id uuid NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+  mode text NOT NULL CHECK (mode IN ('local', 'remote', 'practice')),
+  status text NOT NULL CHECK (status IN ('draft', 'waiting', 'locked', 'live', 'settled', 'cancelled', 'expired')),
+  round_length_seconds integer NOT NULL CHECK (round_length_seconds BETWEEN 30 AND 3600),
+  paper_stake_usd numeric(20, 2) NOT NULL CHECK (paper_stake_usd >= 0),
+  rules jsonb NOT NULL DEFAULT '{}'::jsonb,
+  expires_at timestamptz NOT NULL,
+  started_at timestamptz,
+  settled_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS arena_players (
+  challenge_id uuid NOT NULL REFERENCES arena_challenges(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+  seat smallint NOT NULL CHECK (seat IN (1, 2)),
+  display_name text NOT NULL,
+  joined_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (challenge_id, seat),
+  UNIQUE (challenge_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS arena_rounds (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  challenge_id uuid NOT NULL REFERENCES arena_challenges(id) ON DELETE CASCADE,
+  round_number integer NOT NULL DEFAULT 1 CHECK (round_number > 0),
+  status text NOT NULL CHECK (status IN ('locked', 'live', 'settled', 'cancelled')),
+  market_data_mode text NOT NULL CHECK (market_data_mode IN ('live', 'fallback')),
+  opened_at timestamptz,
+  closes_at timestamptz,
+  settled_at timestamptz,
+  market_snapshot jsonb NOT NULL DEFAULT '{}'::jsonb,
+  UNIQUE (challenge_id, round_number)
+);
+
+CREATE TABLE IF NOT EXISTS arena_entries (
+  round_id uuid NOT NULL REFERENCES arena_rounds(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+  instrument_namespace text NOT NULL,
+  instrument_id text NOT NULL,
+  instrument_symbol text NOT NULL,
+  direction text NOT NULL CHECK (direction IN ('long', 'short')),
+  playbook text NOT NULL CHECK (playbook IN ('momentum', 'mean-reversion', 'defensive')),
+  entry_price numeric(30, 12) NOT NULL CHECK (entry_price >= 0),
+  exit_price numeric(30, 12) CHECK (exit_price IS NULL OR exit_price >= 0),
+  directional_return_pct numeric(12, 8),
+  selection_commitment_hash text,
+  revealed_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (round_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS arena_results (
+  round_id uuid PRIMARY KEY REFERENCES arena_rounds(id) ON DELETE CASCADE,
+  winner_user_id uuid REFERENCES app_users(id) ON DELETE SET NULL,
+  tie boolean NOT NULL DEFAULT false,
+  winning_margin_pct numeric(12, 8) NOT NULL CHECK (winning_margin_pct >= 0),
+  canonical_receipt jsonb NOT NULL,
+  receipt_hash text NOT NULL UNIQUE,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS arena_challenges_status_expiry_idx ON arena_challenges (status, expires_at);
+CREATE INDEX IF NOT EXISTS arena_rounds_challenge_idx ON arena_rounds (challenge_id, round_number DESC);
+
 CREATE TABLE IF NOT EXISTS data_consents (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
@@ -311,3 +379,4 @@ CREATE TABLE IF NOT EXISTS data_consents (
 COMMENT ON TABLE wallet_accounts IS 'Public wallet identifiers only. Never store wallet secrets.';
 COMMENT ON TABLE copy_mandates IS 'Revocable, bounded authority. Withdrawals are prohibited by constraint.';
 COMMENT ON TABLE alert_deliveries IS 'Mandatory execution-state notifications and acknowledgement trail.';
+COMMENT ON TABLE arena_challenges IS 'Remote-ready challenge authority. The current browser client only runs local two-player and disclosed practice rounds.';

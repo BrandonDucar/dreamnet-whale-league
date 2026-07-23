@@ -7,8 +7,7 @@
     Bot,
     Check,
     ChevronDown,
-    CircleDollarSign,
-    Clock3,
+    CircleHelp,
     Copy,
     Crosshair,
     FileCheck2,
@@ -25,23 +24,23 @@
     Search,
     ShieldCheck,
     Swords,
-    Target,
     TrendingDown,
     TrendingUp,
     UserRound,
     WalletCards,
     X,
-    Zap,
   } from '@lucide/svelte'
   import { onMount } from 'svelte'
   import MarketBubbles from './lib/MarketBubbles.svelte'
   import MarketChart from './lib/MarketChart.svelte'
   import MarketDepth from './lib/MarketDepth.svelte'
   import PortfolioSetup from './lib/PortfolioSetup.svelte'
+  import PlayerArena from './lib/PlayerArena.svelte'
   import TraderGallery from './lib/TraderGallery.svelte'
+  import Tutorial from './lib/Tutorial.svelte'
   import { buildFallbackBook, buildFallbackChart, changeFor, fallbackAssets, fetchChart, fetchMarket, fetchOrderBook, formatPrice } from './lib/market'
   import { chainName, connectInjectedWallet, getInjectedWallet, readInjectedWallet, shortAddress } from './lib/wallet'
-  import type { BattleReceipt, BubbleMetric, ChartPoint, MarketAsset, MarketWindow, Member, OpenPosition, OrderBookLevel, PaperOrder, PaperOrderSide, PaperOrderType, PositionSide, Thesis } from './lib/types'
+  import type { BattleReceipt, BubbleMetric, ChartPoint, MarketAsset, MarketWindow, Member, OrderBookLevel, PaperOrder, PaperOrderSide, PaperOrderType } from './lib/types'
 
   type DataStatus = 'loading' | 'live' | 'fallback'
   type Signal = {
@@ -58,9 +57,7 @@
   let marketWindow: MarketWindow = '24h'
   let bubbleMetric: BubbleMetric = 'marketCap'
   let selectedAssetId = 'bitcoin'
-  let opponentId = 'ethereum'
   let selectedAsset = assets[0]
-  let opponent = assets[1]
   let chartDays = 7
   let chartPoints: ChartPoint[] = buildFallbackChart(selectedAsset, chartDays)
   let chartLoading = false
@@ -70,21 +67,16 @@
   let bookStatus: 'loading' | 'live' | 'fallback' = 'fallback'
   let member: Member | null = null
   let showJoin = false
+  let showTutorial = false
   let displayName = ''
   let teamName = ''
   let joinError = ''
   let paperBalance = 10_000
-  let paperStake = 500
-  let positionSide: PositionSide = 'left'
-  let thesis: Thesis = 'momentum'
-  let openPosition: OpenPosition | null = null
-  let secondsRemaining = 60
   let receipts: BattleReceipt[] = []
   let latestReceipt: BattleReceipt | null = null
   let copied = false
   let marketTimer: ReturnType<typeof setInterval> | null = null
   let bookTimer: ReturnType<typeof setInterval> | null = null
-  let roundTimer: ReturnType<typeof setInterval> | null = null
   let searchTerm = ''
   let ticketMode: 'trade' | 'swap' = 'trade'
   let orderType: PaperOrderType = 'market'
@@ -105,7 +97,6 @@
   let walletNotice = ''
 
   $: selectedAsset = assets.find((asset) => asset.id === selectedAssetId) ?? assets[0]
-  $: opponent = assets.find((asset) => asset.id === opponentId) ?? assets.find((asset) => asset.id !== selectedAssetId) ?? assets[1]
   $: marketChange = changeFor(selectedAsset, marketWindow)
   $: marketBreadth = assets.filter((asset) => changeFor(asset, marketWindow) > 0).length / Math.max(assets.length, 1)
   $: marketMood = marketBreadth >= 0.68 ? 'RISK ON' : marketBreadth <= 0.38 ? 'RISK OFF' : 'MIXED TAPE'
@@ -123,7 +114,7 @@
 
   onMount(() => {
     const savedMember = localStorage.getItem('whale-league-member')
-    const savedReceipts = localStorage.getItem('whale-league-receipts')
+    const savedReceipts = localStorage.getItem('whale-player-battle-receipts-v2')
     const savedOrders = localStorage.getItem('whale-league-paper-orders')
     if (savedMember) member = JSON.parse(savedMember) as Member
     if (savedReceipts) {
@@ -131,6 +122,7 @@
       latestReceipt = receipts[0] ?? null
     }
     if (savedOrders) paperOrders = JSON.parse(savedOrders) as PaperOrder[]
+    if (localStorage.getItem('whale-tutorial-complete') !== '1') showTutorial = true
 
     const wallet = getInjectedWallet()
     const onAccountsChanged = (value: unknown) => {
@@ -154,16 +146,9 @@
     void loadDepth(selectedAsset)
     marketTimer = setInterval(() => void refreshMarket(), 60_000)
     bookTimer = setInterval(() => void loadDepth(selectedAsset), 12_000)
-    roundTimer = setInterval(() => {
-      if (!openPosition) return
-      secondsRemaining = Math.max(0, Math.ceil((openPosition.closesAt - Date.now()) / 1000))
-      if (secondsRemaining === 0) void closePaperPosition()
-    }, 1000)
-
     return () => {
       if (marketTimer) clearInterval(marketTimer)
       if (bookTimer) clearInterval(bookTimer)
-      if (roundTimer) clearInterval(roundTimer)
       wallet?.removeListener?.('accountsChanged', onAccountsChanged)
       wallet?.removeListener?.('chainChanged', onChainChanged)
     }
@@ -230,7 +215,6 @@
 
   function selectAsset(asset: MarketAsset) {
     selectedAssetId = asset.id
-    if (opponentId === asset.id) opponentId = assets.find((candidate) => candidate.id !== asset.id)?.id ?? opponentId
     orderLimit = asset.price
     orderStop = asset.price
     orderTakeProfit = asset.price * 1.05
@@ -255,63 +239,16 @@
     showJoin = false
   }
 
-  function openPaperPosition() {
-    if (!member) {
-      showJoin = true
-      return
-    }
-    const boundedStake = Math.max(25, Math.min(paperBalance, Number(paperStake) || 25))
-    paperStake = boundedStake
-    openPosition = {
-      id: crypto.randomUUID(),
-      openedAt: new Date().toISOString(),
-      closesAt: Date.now() + 60_000,
-      side: positionSide,
-      leftId: selectedAsset.id,
-      rightId: opponent.id,
-      leftEntry: selectedAsset.price,
-      rightEntry: opponent.price,
-      paperStake: boundedStake,
-      thesis,
-    }
-    secondsRemaining = 60
+  function recordBattleReceipt(receipt: BattleReceipt) {
+    latestReceipt = receipt
+    receipts = [receipt, ...receipts].slice(0, 12)
+    paperBalance = Number((paperBalance + receipt.hostHypotheticalPnl).toFixed(2))
+    localStorage.setItem('whale-player-battle-receipts-v2', JSON.stringify(receipts))
   }
 
-  async function closePaperPosition() {
-    if (!openPosition || !member) return
-    const position = openPosition
-    const leftAsset = assets.find((asset) => asset.id === position.leftId) ?? selectedAsset
-    const rightAsset = assets.find((asset) => asset.id === position.rightId) ?? opponent
-    const leftReturn = position.leftEntry ? ((leftAsset.price - position.leftEntry) / position.leftEntry) * 100 : 0
-    const rightReturn = position.rightEntry ? ((rightAsset.price - position.rightEntry) / position.rightEntry) * 100 : 0
-    const relativeEdge = position.side === 'left' ? leftReturn - rightReturn : rightReturn - leftReturn
-    const hypotheticalPnl = Number((position.paperStake * (relativeEdge / 100)).toFixed(2))
-    const unsigned: Omit<BattleReceipt, 'hash'> = {
-      id: position.id,
-      openedAt: position.openedAt,
-      closedAt: new Date().toISOString(),
-      member: member.displayName,
-      team: member.teamName,
-      leftSymbol: leftAsset.symbol,
-      rightSymbol: rightAsset.symbol,
-      selectedSide: position.side,
-      selectedSymbol: position.side === 'left' ? leftAsset.symbol : rightAsset.symbol,
-      paperStake: position.paperStake,
-      thesis: position.thesis,
-      leftReturn: Number(leftReturn.toFixed(4)),
-      rightReturn: Number(rightReturn.toFixed(4)),
-      relativeEdge: Number(relativeEdge.toFixed(4)),
-      hypotheticalPnl,
-      fundsMoved: 0,
-      dataMode: dataStatus === 'live' ? 'live' : 'fallback',
-    }
-    const hash = await sha256(JSON.stringify(unsigned))
-    latestReceipt = { ...unsigned, hash }
-    receipts = [latestReceipt, ...receipts].slice(0, 12)
-    paperBalance = Number((paperBalance + hypotheticalPnl).toFixed(2))
-    localStorage.setItem('whale-league-receipts', JSON.stringify(receipts))
-    openPosition = null
-    secondsRemaining = 60
+  function closeTutorial() {
+    showTutorial = false
+    localStorage.setItem('whale-tutorial-complete', '1')
   }
 
   async function sha256(value: string) {
@@ -416,14 +353,11 @@
     }
   }
 
-  function formatTimer(seconds: number) {
-    return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
-  }
 </script>
 
 <svelte:head>
   <title>Whale Intelligence League | Trading Intelligence Arena</title>
-  <meta name="description" content="Explore live markets, follow source-linked traders, connect a wallet, and train inside a receipted trading intelligence arena." />
+  <meta name="description" content="Explore live markets, follow source-linked traders, connect a wallet, and compete player-versus-player inside a receipted trading intelligence arena." />
 </svelte:head>
 
 <div class="terminal-shell">
@@ -447,6 +381,7 @@
         <span></span>{dataStatus === 'live' ? 'LIVE FEED' : dataStatus === 'loading' ? 'SYNCING' : 'TEACHING FEED'}
       </span>
       <button class="icon-button desktop-only" type="button" title="Alerts"><Bell size={17} /></button>
+      <button class="icon-button" type="button" title="Open tutorial" aria-label="Open tutorial" onclick={() => (showTutorial = true)}><CircleHelp size={17} /></button>
       <button class="wallet-button" class:connected={walletAddress} type="button" onclick={() => void connectWallet()} title={walletAddress ? `${walletAddress} on ${chainName(walletChainId)}` : 'Connect an injected EVM wallet'}>
         <WalletCards size={16} /><span>{walletAddress ? shortAddress(walletAddress) : 'Connect wallet'}</span>
       </button>
@@ -506,58 +441,16 @@
       <PortfolioSetup {walletAddress} {walletChainId} onconnect={() => void connectWallet()} />
       <TraderGallery {walletAddress} />
 
-      <section class="arena-panel" id="arena" aria-labelledby="arena-title">
-        <div class="panel-toolbar arena-toolbar">
-          <div class="panel-title"><Swords size={15} /><strong id="arena-title">HEAD-TO-HEAD ARENA</strong><span>ROUND 01</span></div>
-          <div class="round-clock" class:clock-live={openPosition !== null}><Clock3 size={14} />{formatTimer(secondsRemaining)}</div>
-        </div>
-
-        <div class="contenders">
-          <button class="contender left" class:selected-side={positionSide === 'left'} type="button" onclick={() => (positionSide = 'left')}>
-            <span class="corner-label">SIDE A</span>
-            <div class="coin-orb gain-orb">{#if selectedAsset.image}<img src={selectedAsset.image} alt="" />{:else}{selectedAsset.symbol.slice(0, 1)}{/if}</div>
-            <strong>{selectedAsset.symbol}</strong>
-            <span>{formatPrice(selectedAsset.price)}</span>
-            <em class:positive={selectedAsset.change24h >= 0} class:negative={selectedAsset.change24h < 0}>{selectedAsset.change24h >= 0 ? '+' : ''}{selectedAsset.change24h.toFixed(2)}%</em>
-          </button>
-
-          <div class="versus-mark"><span>VS</span><small>RELATIVE RETURN</small></div>
-
-          <button class="contender right" class:selected-side={positionSide === 'right'} type="button" onclick={() => (positionSide = 'right')}>
-            <span class="corner-label">SIDE B</span>
-            <div class="coin-orb opponent-orb">{#if opponent.image}<img src={opponent.image} alt="" />{:else}{opponent.symbol.slice(0, 1)}{/if}</div>
-            <strong>{opponent.symbol}</strong>
-            <span>{formatPrice(opponent.price)}</span>
-            <em class:positive={opponent.change24h >= 0} class:negative={opponent.change24h < 0}>{opponent.change24h >= 0 ? '+' : ''}{opponent.change24h.toFixed(2)}%</em>
-          </button>
-        </div>
-
-        <div class="opponent-row">
-          <span>Compare {selectedAsset.symbol} against</span>
-          <select bind:value={opponentId} aria-label="Select opposing asset">
-            {#each assets.filter((asset) => asset.id !== selectedAssetId) as asset}<option value={asset.id}>{asset.symbol} / {asset.name}</option>{/each}
-          </select>
-        </div>
-
-        <div class="order-ticket">
-          <label><span>Paper stake</span><div class="ticket-input"><CircleDollarSign size={15} /><input type="number" min="25" max={paperBalance} step="25" bind:value={paperStake} /></div></label>
-          <label><span>Playbook</span><select bind:value={thesis}><option value="momentum">Momentum</option><option value="mean-reversion">Mean reversion</option><option value="defensive">Defensive</option></select></label>
-          <div class="ticket-side"><span>Selected</span><strong>{positionSide === 'left' ? selectedAsset.symbol : opponent.symbol}</strong></div>
-          {#if openPosition}
-            <button class="close-position-button" type="button" onclick={() => void closePaperPosition()}><Target size={16} /> Close paper round</button>
-          {:else}
-            <button class="enter-position-button" type="button" onclick={openPaperPosition}><Zap size={16} fill="currentColor" /> Enter paper position</button>
-          {/if}
-        </div>
-
-        {#if openPosition}
-          <div class="position-live"><span><i></i>POSITION OPEN</span><strong>{openPosition.side === 'left' ? selectedAsset.symbol : opponent.symbol}</strong><span>${openPosition.paperStake.toFixed(2)} paper</span><span>Auto-close {formatTimer(secondsRemaining)}</span></div>
-        {:else if latestReceipt}
-          <div class="position-result">
-            <span>LAST ROUND</span><strong>{latestReceipt.selectedSymbol}</strong><span class:positive={latestReceipt.hypotheticalPnl >= 0} class:negative={latestReceipt.hypotheticalPnl < 0}>{latestReceipt.hypotheticalPnl >= 0 ? '+' : '-'}${Math.abs(latestReceipt.hypotheticalPnl).toFixed(2)}</span><span>{latestReceipt.leftSymbol} vs {latestReceipt.rightSymbol}</span>
-          </div>
-        {/if}
-      </section>
+      <PlayerArena
+        {assets}
+        {member}
+        dataMode={dataStatus}
+        maxStake={paperBalance}
+        practiceAssetId={benchmarkSignal?.asset.id ?? 'bitcoin'}
+        practiceDirection={benchmarkSignal?.direction === 'SHORT BIAS' ? 'short' : 'long'}
+        onrequirejoin={() => (showJoin = true)}
+        onreceipt={recordBattleReceipt}
+      />
 
       <section class="chart-panel" id="chart" aria-labelledby="chart-title">
         <div class="chart-head">
@@ -679,7 +572,8 @@
         <div class="rail-heading"><span>RECEIPT LEDGER</span><span>{receipts.length}</span></div>
         {#if latestReceipt}
           <div class="receipt-preview">
-            <div><span>{latestReceipt.leftSymbol} / {latestReceipt.rightSymbol}</span><strong class:positive={latestReceipt.hypotheticalPnl >= 0} class:negative={latestReceipt.hypotheticalPnl < 0}>{latestReceipt.hypotheticalPnl >= 0 ? '+' : '-'}${Math.abs(latestReceipt.hypotheticalPnl).toFixed(2)}</strong></div>
+            <div><span>{latestReceipt.hostName} vs {latestReceipt.opponentName}</span><strong>{latestReceipt.winnerName}</strong></div>
+            <div><span>{latestReceipt.hostSymbol} {latestReceipt.hostDirection.toUpperCase()} / {latestReceipt.opponentSymbol} {latestReceipt.opponentDirection.toUpperCase()}</span><strong class:positive={latestReceipt.hostHypotheticalPnl >= 0} class:negative={latestReceipt.hostHypotheticalPnl < 0}>{latestReceipt.hostHypotheticalPnl >= 0 ? '+' : '-'}${Math.abs(latestReceipt.hostHypotheticalPnl).toFixed(2)}</strong></div>
             <code>sha256:{latestReceipt.hash.slice(0, 16)}...{latestReceipt.hash.slice(-8)}</code>
             <div class="receipt-actions"><span><LockKeyhole size={12} />$0 moved</span><button type="button" onclick={copyReceipt}>{#if copied}<Check size={13} /> Copied{:else}<Copy size={13} /> Copy hash{/if}</button></div>
           </div>
@@ -716,6 +610,8 @@
 {#if walletNotice}
   <button class="wallet-toast" type="button" onclick={() => (walletNotice = '')} title="Dismiss wallet notice"><ShieldCheck size={14} />{walletNotice}<X size={13} /></button>
 {/if}
+
+<Tutorial open={showTutorial} onclose={closeTutorial} />
 
 {#if showJoin}
   <div class="modal-backdrop" role="presentation" onclick={(event) => { if (event.currentTarget === event.target) showJoin = false }}>

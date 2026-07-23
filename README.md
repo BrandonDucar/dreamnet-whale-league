@@ -1,6 +1,6 @@
 # Whale Intelligence League
 
-Whale Intelligence League is a user-facing market intelligence terminal and competitive trading arena. It combines market-map discovery, interactive charting, public depth data, source-linked trader research, read-only wallet discovery, guided risk planning, AI-ranked setups, head-to-head rounds, advanced paper orders, swap quotes, and verifiable receipts.
+Whale Intelligence League is a user-facing market intelligence terminal and competitive trading arena. It combines market-map discovery, interactive charting, public depth data, source-linked trader research, read-only wallet discovery, guided risk planning, AI-ranked setups, player-versus-player rounds, advanced paper orders, swap quotes, and verifiable receipts.
 
 The first release contains one clearly disclosed simulation agent, **DOW JONES**. It ranks teaching setups using deterministic market heuristics and always exposes its thesis and invalidation condition. It does not create hidden traders or claim to predict future prices.
 
@@ -9,7 +9,8 @@ The first release contains one clearly disclosed simulation agent, **DOW JONES**
 - Renders an interactive physics-based crypto bubble map from public market data.
 - Displays interactive price history using TradingView Lightweight Charts.
 - Shows a public order-book depth ladder when the selected pair is available.
-- Runs 60-second asset-vs-asset paper battles based on relative return.
+- Runs local player-versus-player paper matches where each trader chooses a market, direction, and playbook against the same clock.
+- Includes a disclosed DOW JONES practice opponent and a first-run walkthrough that remains available from the top bar.
 - Supports market, limit, stop, bracket, and TWAP paper-order workflows.
 - Produces cross-network paper swap quotes with fee, impact, and slippage visibility.
 - Lets a real person join locally with a display name and paper desk.
@@ -20,6 +21,7 @@ The first release contains one clearly disclosed simulation agent, **DOW JONES**
 - Supports observe, alert, and paper-copy follow modes.
 - Captures a short risk interview and builds an explainable paper-plan draft.
 - Defines the Postgres lineage, marketplace, mandate, policy, execution, alert, and receipt control plane for later server integration.
+- Defines remote challenge, player-entry, round, and result tables without pretending the current local match code is an online invitation.
 - Works across desktop and mobile layouts.
 
 ## What it does not do

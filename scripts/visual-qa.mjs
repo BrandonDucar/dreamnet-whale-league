@@ -14,9 +14,17 @@ async function captureDesktop() {
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.tutorial-modal')
+  const tutorialSteps = await page.locator('.tutorial-progress button').count()
+  await page.screenshot({ path: path.join(outputDir, '00-desktop-tutorial.png'), fullPage: false })
+  await page.getByTitle('Close tutorial').click()
   await page.waitForSelector('.market-bubble')
   await page.waitForTimeout(3500)
   await page.screenshot({ path: path.join(outputDir, '01-desktop-market.png'), fullPage: true })
+
+  await page.getByRole('button', { name: 'Open tutorial' }).click()
+  await page.waitForSelector('.tutorial-modal')
+  await page.getByTitle('Close tutorial').click()
 
   const bubbleCount = await page.locator('.market-bubble').count()
   await page.getByRole('button', { name: /Solana/ }).first().click()
@@ -24,9 +32,10 @@ async function captureDesktop() {
   await page.getByPlaceholder('Your name').fill('Brandon')
   await page.getByPlaceholder('Your team or research desk').fill('Ghostmint Research')
   await page.getByRole('button', { name: /Open paper desk/i }).click()
-  await page.getByRole('button', { name: /Enter paper position/i }).click()
+  await page.getByLabel('Player 2 name').fill('Primo')
+  await page.getByRole('button', { name: /Start player match/i }).click()
   await page.waitForTimeout(500)
-  await page.getByRole('button', { name: /Close paper round/i }).click()
+  await page.getByRole('button', { name: /Settle round now/i }).click()
   await page.getByRole('button', { name: /LIMIT/ }).last().click()
   await page.getByRole('button', { name: /Place paper buy/i }).click()
   await page.waitForTimeout(500)
@@ -39,10 +48,11 @@ async function captureDesktop() {
     bubbleCount: document.querySelectorAll('.market-bubble').length,
     receiptCount: document.querySelectorAll('.receipt-preview').length,
     orderCount: document.querySelectorAll('.paper-order-row').length,
+    playerDeskCount: document.querySelectorAll('.player-desk').length,
     h1: document.querySelector('h1')?.textContent ?? null,
   }))
   await page.close()
-  return { metrics: { ...metrics, bubbleCount }, errors }
+  return { metrics: { ...metrics, bubbleCount, tutorialSteps }, errors }
 }
 
 async function captureMobile() {
@@ -50,6 +60,8 @@ async function captureMobile() {
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.tutorial-modal')
+  await page.getByTitle('Close tutorial').click()
   await page.waitForSelector('.market-bubble')
   await page.waitForTimeout(2500)
   await page.screenshot({ path: path.join(outputDir, '03-mobile-market.png'), fullPage: true })
@@ -75,3 +87,4 @@ if (desktop.errors.length || mobile.errors.length) process.exitCode = 1
 if (desktop.metrics.scrollWidth > desktop.metrics.viewportWidth || mobile.metrics.scrollWidth > mobile.metrics.viewportWidth) process.exitCode = 1
 if (desktop.metrics.canvasCount < 1 || mobile.metrics.canvasCount < 1) process.exitCode = 1
 if (desktop.metrics.receiptCount < 1 || desktop.metrics.orderCount < 1) process.exitCode = 1
+if (desktop.metrics.playerDeskCount !== 2 || desktop.metrics.tutorialSteps !== 6) process.exitCode = 1
