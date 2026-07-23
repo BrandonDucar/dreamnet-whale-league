@@ -25,6 +25,14 @@
   let lastKey = ''
 
   function radiusFor(asset: MarketAsset, currentAssets: MarketAsset[]) {
+    if (metric === 'performance') {
+      const values = currentAssets.map((item) => changeFor(item, window))
+      const min = Math.min(...values)
+      const max = Math.max(...values)
+      const val = changeFor(asset, window)
+      const normalized = max === min ? 0.5 : (val - min) / (max - min)
+      return Math.round(18 + Math.pow(normalized, 1.3) * 36)
+    }
     const values = currentAssets.map((item) => item[metric]).filter(Boolean)
     const min = Math.min(...values)
     const max = Math.max(...values)

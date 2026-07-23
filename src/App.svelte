@@ -74,7 +74,7 @@
   let assets = fallbackAssets
   let dataStatus: DataStatus = 'loading'
   let marketWindow: MarketWindow = '24h'
-  let bubbleMetric: BubbleMetric = 'marketCap'
+  let bubbleMetric: BubbleMetric = 'performance'
   let selectedAssetId = 'bitcoin'
   let selectedAsset = assets[0]
   let chartDays = 7
@@ -145,9 +145,20 @@
   $: benchmarkSignal = signals[0]
   $: swapToAsset = assets.find((asset) => asset.id === swapToId) ?? assets.find((asset) => asset.symbol === 'USDC') ?? assets[1]
   $: swapQuote = swapToAsset.price > 0 ? (swapFromAmount * selectedAsset.price * 0.9982) / swapToAsset.price : 0
-  $: activeEnvironmentMeta = environments.find((environment) => environment.id === activeEnvironment) ?? environments[0]
+  async function refreshMarket() {
+    dataStatus = 'loading'
+    try {
+      const data = await fetchMarket()
+      assets = data
+      dataStatus = 'live'
+    } catch {
+      assets = fallbackAssets
+      dataStatus = 'fallback'
+    }
+  }
 
   onMount(() => {
+    void refreshMarket()
     const savedMember = localStorage.getItem('whale-league-member')
     const savedReceipts = localStorage.getItem('whale-player-battle-receipts-v2')
     const savedOrders = localStorage.getItem('whale-league-paper-orders')
@@ -954,7 +965,11 @@
           </div>
           <div class="metric-select">
             <ListFilter size={14} />
-            <select bind:value={bubbleMetric} aria-label="Size bubbles by"><option value="marketCap">MARKET CAP</option><option value="volume">VOLUME</option></select>
+            <select bind:value={bubbleMetric} aria-label="Size bubbles by">
+              <option value="performance">TOP PERFORMERS (% GAIN)</option>
+              <option value="marketCap">MARKET CAP</option>
+              <option value="volume">VOLUME</option>
+            </select>
             <ChevronDown size={13} />
           </div>
           <button class="icon-button" type="button" onclick={() => void refreshMarket()} title="Refresh market data"><RefreshCw size={15} class={dataStatus === 'loading' ? 'spinning' : ''} /></button>
@@ -962,7 +977,7 @@
         <div class="market-canvas">
           <MarketBubbles assets={filteredAssets} selectedId={selectedAssetId} window={marketWindow} metric={bubbleMetric} onselect={selectAsset} />
         </div>
-        <div class="market-legend"><span><i class="gain-dot"></i>Advancing</span><span><i class="loss-dot"></i>Declining</span><span>Bubble size: {bubbleMetric === 'marketCap' ? 'market cap' : '24h volume'}</span><span>{assets.length} instruments</span></div>
+        <div class="market-legend"><span><i class="gain-dot"></i>Advancing</span><span><i class="loss-dot"></i>Declining</span><span>Bubble size: {bubbleMetric === 'performance' ? '% gain' : bubbleMetric === 'marketCap' ? 'market cap' : '24h volume'}</span><span>{assets.length} instruments</span></div>
       </section>
       <MarketTerminal
         {selectedAsset}

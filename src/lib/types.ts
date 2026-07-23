@@ -14,7 +14,7 @@ export type MarketAsset = {
 }
 
 export type MarketWindow = '1h' | '24h' | '7d'
-export type BubbleMetric = 'marketCap' | 'volume'
+export type BubbleMetric = 'performance' | 'marketCap' | 'volume'
 export type TradeDirection = 'long' | 'short'
 export type Thesis = 'momentum' | 'mean-reversion' | 'defensive'
 export type PaperOrderType = 'market' | 'limit' | 'stop' | 'bracket' | 'twap' | 'swap'
