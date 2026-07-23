@@ -3,7 +3,6 @@
     Activity,
     ArrowDownUp,
     BarChart3,
-    Bell,
     Bot,
     Check,
     ChevronDown,
@@ -38,10 +37,12 @@
   import PlayerArena from './lib/PlayerArena.svelte'
   import TraderGallery from './lib/TraderGallery.svelte'
   import Tutorial from './lib/Tutorial.svelte'
+  import WalletDialog from './lib/WalletDialog.svelte'
   import WhaleIntelligence from './lib/WhaleIntelligence.svelte'
   import { buildFallbackBook, buildFallbackChart, changeFor, fallbackAssets, fetchChart, fetchMarket, fetchOrderBook, formatPrice } from './lib/market'
   import { estimatePaperFee } from './lib/portfolio'
   import { chainName, connectInjectedWallet, getInjectedWallet, readInjectedWallet, shortAddress } from './lib/wallet'
+  import type { InjectedWalletProvider } from './lib/wallet'
   import type { BattleReceipt, BubbleMetric, ChartPoint, MarketAsset, MarketWindow, Member, OrderBookLevel, PaperFeeQuote, PaperOrder, PaperOrderSide, PaperOrderType, PaperPosition, WalletHolding } from './lib/types'
 
   type DataStatus = 'loading' | 'live' | 'fallback'
@@ -80,6 +81,7 @@
   let bookStatus: 'loading' | 'live' | 'fallback' = 'fallback'
   let member: Member | null = null
   let showJoin = false
+  let showWallet = false
   let showTutorial = false
   let displayName = ''
   let teamName = ''
@@ -107,6 +109,7 @@
   let swapSlippage = 0.5
   let walletAddress = ''
   let walletChainId = ''
+  let walletMode: 'connected' | 'watch' | '' = ''
   let walletNotice = ''
   let walletHoldings: WalletHolding[] = []
   let paperPositions: PaperPosition[] = []
@@ -138,6 +141,7 @@
     const savedReceipts = localStorage.getItem('whale-player-battle-receipts-v2')
     const savedOrders = localStorage.getItem('whale-league-paper-orders')
     const savedPortfolio = localStorage.getItem('whale-league-paper-portfolio-v1')
+    const savedWalletSelection = localStorage.getItem('whale-wallet-selection-v1')
     if (savedMember) member = JSON.parse(savedMember) as Member
     if (savedReceipts) {
       receipts = JSON.parse(savedReceipts) as BattleReceipt[]
@@ -162,6 +166,18 @@
         localStorage.removeItem('whale-league-paper-portfolio-v1')
       }
     }
+    if (savedWalletSelection) {
+      try {
+        const selection = JSON.parse(savedWalletSelection) as { address?: string; chainId?: string; mode?: 'connected' | 'watch' }
+        if (selection.address && selection.chainId && /^0x[a-fA-F0-9]{40}$/.test(selection.address)) {
+          walletAddress = selection.address
+          walletChainId = selection.chainId
+          walletMode = selection.mode ?? 'watch'
+        }
+      } catch {
+        localStorage.removeItem('whale-wallet-selection-v1')
+      }
+    }
     if (!localStorage.getItem('whale-guided-tour-v3')) showTutorial = true
 
     const wallet = getInjectedWallet()
@@ -170,17 +186,30 @@
       const nextAddress = accounts[0] ?? ''
       syncPortfolioWallet(nextAddress)
       walletAddress = nextAddress
+      walletMode = nextAddress ? 'connected' : ''
+      persistWalletSelection()
       walletNotice = walletAddress ? `Wallet connected: ${shortAddress(walletAddress)}` : 'Wallet disconnected.'
     }
     const onChainChanged = (value: unknown) => {
       walletChainId = typeof value === 'string' ? value : ''
       walletNotice = walletChainId ? `Network changed to ${chainName(walletChainId)}.` : ''
     }
-    void readInjectedWallet().then((connection) => {
-      syncPortfolioWallet(connection.address)
-      walletAddress = connection.address
-      walletChainId = connection.chainId
-    }).catch(() => undefined)
+    if (walletMode !== 'watch') {
+      void readInjectedWallet().then((connection) => {
+        if (!connection.address) {
+          if (walletMode === 'connected' && walletAddress) {
+            walletMode = 'watch'
+            persistWalletSelection()
+          }
+          return
+        }
+        syncPortfolioWallet(connection.address)
+        walletAddress = connection.address
+        walletChainId = connection.chainId
+        walletMode = 'connected'
+        persistWalletSelection()
+      }).catch(() => undefined)
+    }
     wallet?.on?.('accountsChanged', onAccountsChanged)
     wallet?.on?.('chainChanged', onChainChanged)
 
@@ -280,6 +309,9 @@
     member = { displayName: displayName.trim(), teamName: teamName.trim(), joinedAt: new Date().toISOString() }
     localStorage.setItem('whale-league-member', JSON.stringify(member))
     showJoin = false
+    activeEnvironment = 'desk'
+    walletNotice = `${member.teamName} is ready with 500 FKUSDC. Attach a wallet or build your paper plan next.`
+    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }))
   }
 
   function recordBattleReceipt(receipt: BattleReceipt) {
@@ -317,6 +349,19 @@
       startingValue: paperStartingValue,
       holdings: walletHoldings,
       positions: paperPositions,
+      updatedAt: new Date().toISOString(),
+    }))
+  }
+
+  function persistWalletSelection() {
+    if (!walletAddress || !walletChainId || !walletMode) {
+      localStorage.removeItem('whale-wallet-selection-v1')
+      return
+    }
+    localStorage.setItem('whale-wallet-selection-v1', JSON.stringify({
+      address: walletAddress,
+      chainId: walletChainId,
+      mode: walletMode,
       updatedAt: new Date().toISOString(),
     }))
   }
@@ -656,16 +701,32 @@
     localStorage.removeItem('whale-league-member')
   }
 
-  async function connectWallet() {
+  async function connectWallet(selectedProvider: InjectedWalletProvider) {
     try {
-      const connection = await connectInjectedWallet()
+      const connection = await connectInjectedWallet(selectedProvider)
       syncPortfolioWallet(connection.address)
       walletAddress = connection.address
       walletChainId = connection.chainId
+      walletMode = 'connected'
+      persistWalletSelection()
+      showWallet = false
+      activeEnvironment = 'desk'
       walletNotice = `Connected ${shortAddress(walletAddress)} on ${chainName(walletChainId)}. Trading authority has not been granted.`
     } catch (error) {
       walletNotice = error instanceof Error ? error.message : 'Wallet connection failed.'
+      throw error
     }
+  }
+
+  function watchWallet(address: string, chainId: string) {
+    syncPortfolioWallet(address)
+    walletAddress = address
+    walletChainId = chainId
+    walletMode = 'watch'
+    persistWalletSelection()
+    showWallet = false
+    activeEnvironment = 'desk'
+    walletNotice = `Watching ${shortAddress(address)} on ${chainName(chainId)}. No wallet connection or signing permission was requested.`
   }
 
 </script>
@@ -695,15 +756,13 @@
       <span class="feed-status" class:feed-live={dataStatus === 'live'}>
         <span></span>{dataStatus === 'live' ? 'LIVE FEED' : dataStatus === 'loading' ? 'SYNCING' : 'TEACHING FEED'}
       </span>
-      <button class="icon-button desktop-only" type="button" title="Alerts"><Bell size={17} /></button>
-      <button class="guided-tour-button" type="button" onclick={openTutorial}><CircleHelp size={16} /><span>Guided tour</span></button>
-      <button class="wallet-button" class:connected={walletAddress} type="button" onclick={() => void connectWallet()} title={walletAddress ? `${walletAddress} on ${chainName(walletChainId)}` : 'Connect an injected EVM wallet'}>
+      <button class="wallet-button" class:connected={walletAddress} type="button" onclick={() => (showWallet = true)} title={walletAddress ? `${walletMode === 'watch' ? 'Watching' : 'Connected'} ${walletAddress} on ${chainName(walletChainId)}` : 'Attach a wallet to your paper desk'}>
         <WalletCards size={16} /><span>{walletAddress ? shortAddress(walletAddress) : 'Connect wallet'}</span>
       </button>
       {#if member}
         <button class="account-button" type="button" onclick={signOut} title="Sign out of paper league"><UserRound size={16} /><span>{member.displayName}</span></button>
       {:else}
-        <button class="join-button" type="button" onclick={() => (showJoin = true)}><LogIn size={16} /> Join league</button>
+        <button class="join-button" type="button" onclick={() => (showJoin = true)}><LogIn size={16} /> Create desk</button>
       {/if}
     </div>
   </header>
@@ -736,13 +795,13 @@
 
   <div class="environment-banner">
     <div>
-      <span>ACTIVE ENVIRONMENT</span>
+      <span>{member ? member.teamName : 'ACTIVE ENVIRONMENT'}</span>
       <h1>{activeEnvironmentMeta.label}</h1>
     </div>
     <p>{activeEnvironmentMeta.task}</p>
+    <span class="paper-boundary"><ShieldCheck size={13} /> Live prices · simulated execution</span>
     <button type="button" onclick={openTutorial}><CircleHelp size={15} /> Tour this workspace</button>
   </div>
-  <div class="beta-banner"><ShieldCheck size={13} /><strong>Paper trading uses live market data and simulated settlement.</strong><span>Live-money trading will be available after beta testing.</span></div>
 
   <div class:with-intelligence={activeEnvironment === 'execute'} class="workspace">
 
@@ -783,7 +842,43 @@
       />
 
       {:else if activeEnvironment === 'desk'}
-      <PortfolioSetup {walletAddress} {walletChainId} {assets} initialHoldings={walletHoldings} onconnect={() => void connectWallet()} onholdings={handleHoldings} />
+      <section class="desk-home" id="desk-home" aria-labelledby="desk-home-title">
+        {#if member}
+          <div class="desk-identity">
+            <span>YOUR ACTIVE PAPER DESK</span>
+            <h2 id="desk-home-title">{member.teamName}</h2>
+            <p>Everything for this desk is ready below. Start with your wallet snapshot, set the limits, then rehearse a trade.</p>
+          </div>
+          <div class="desk-status">
+            <div><span>STARTER CASH</span><strong>${paperBalance.toFixed(2)} FKUSDC</strong></div>
+            <div><span>WALLET</span><strong>{walletAddress ? `${walletMode === 'watch' ? 'WATCHING' : 'CONNECTED'} · ${shortAddress(walletAddress)}` : 'NOT ATTACHED'}</strong></div>
+            <div><span>HOLDINGS</span><strong>{walletHoldings.length ? `${walletHoldings.length} IMPORTED` : 'READY TO SCAN'}</strong></div>
+          </div>
+          <div class="desk-next">
+            <span>NEXT BEST ACTION</span>
+            {#if !walletAddress}
+              <button type="button" onclick={() => (showWallet = true)}><WalletCards size={15} /> Attach wallet <ChevronDown size={14} /></button>
+            {:else if !walletHoldings.length}
+              <a href="#portfolio"><Gauge size={15} /> Analyze holdings <ChevronDown size={14} /></a>
+            {:else}
+              <button type="button" onclick={() => navigateEnvironment('execute')}><BarChart3 size={15} /> Open paper trade <ChevronDown size={14} /></button>
+            {/if}
+          </div>
+        {:else}
+          <div class="desk-identity">
+            <span>START HERE</span>
+            <h2 id="desk-home-title">Create your first paper desk</h2>
+            <p>Your desk keeps your practice balance, wallet snapshot, trading limits, orders, battles, and receipts together on this device.</p>
+          </div>
+          <div class="desk-preview">
+            <span><strong>500 FKUSDC</strong><small>starter balance</small></span>
+            <span><strong>READ ONLY</strong><small>wallet scan</small></span>
+            <span><strong>LIVE DATA</strong><small>paper settlement</small></span>
+          </div>
+          <button class="create-desk-button" type="button" onclick={() => (showJoin = true)}><UserRound size={16} /> Create paper desk</button>
+        {/if}
+      </section>
+      <PortfolioSetup {walletAddress} {walletChainId} {assets} initialHoldings={walletHoldings} onconnect={() => (showWallet = true)} onholdings={handleHoldings} />
       <PaperPortfolio
         {walletAddress}
         positions={paperPositions}
@@ -1027,19 +1122,20 @@
 {/if}
 
 <Tutorial open={showTutorial} onclose={closeTutorial} onnavigate={navigateTutorial} />
+<WalletDialog open={showWallet} onclose={() => (showWallet = false)} onconnect={connectWallet} onwatch={watchWallet} />
 
 {#if showJoin}
   <div class="modal-backdrop" role="presentation" onclick={(event) => { if (event.currentTarget === event.target) showJoin = false }}>
     <div class="join-modal" role="dialog" aria-modal="true" aria-labelledby="join-title">
-      <div class="modal-head"><div><span>PAPER LEAGUE ACCESS</span><h2 id="join-title">Create your desk</h2></div><button class="icon-button" type="button" onclick={() => (showJoin = false)} title="Close"><X size={18} /></button></div>
-      <p>Join as yourself. This creates a local paper profile so your rounds and receipts stay attached to you on this device.</p>
+      <div class="modal-head"><div><span>PAPER LEAGUE ACCESS</span><h2 id="join-title">Create your paper desk</h2></div><button class="icon-button" type="button" onclick={() => (showJoin = false)} title="Close"><X size={18} /></button></div>
+      <p>Name the workspace that will hold your practice balance, wallet snapshot, trading limits, rounds, and receipts on this device.</p>
       <form onsubmit={(event) => { event.preventDefault(); joinLeague() }}>
         <label><span>Display name</span><input bind:value={displayName} autocomplete="name" placeholder="Your name" /></label>
         <label><span>Paper desk</span><input bind:value={teamName} placeholder="Your team or research desk" /></label>
         {#if joinError}<div class="form-error">{joinError}</div>{/if}
         <button class="join-submit" type="submit"><Gauge size={17} /> Open paper desk</button>
       </form>
-      <div class="modal-boundaries"><span><ShieldCheck size={14} />No wallet</span><span><LockKeyhole size={14} />Local profile</span><span><RotateCcw size={14} />Reset anytime</span></div>
+      <div class="modal-boundaries"><span><ShieldCheck size={14} />Wallet optional</span><span><LockKeyhole size={14} />Local profile</span><span><RotateCcw size={14} />Reset anytime</span></div>
     </div>
   </div>
 {/if}

@@ -81,11 +81,13 @@ async function captureDesktop() {
 
   const bubbleCount = await page.locator('.market-bubble').count()
   await page.getByRole('button', { name: /Solana/ }).first().click()
-  await page.getByRole('button', { name: /Join league/i }).click()
+  await page.getByRole('button', { name: /Create desk/i }).click()
   await page.getByPlaceholder('Your name').fill('Brandon')
   await page.getByPlaceholder('Your team or research desk').fill('Ghostmint Research')
   await page.getByRole('button', { name: /Open paper desk/i }).click()
-  await page.getByRole('button', { name: /My Desk Wallet \+ limits/i }).click()
+  await page.waitForSelector('#desk-home')
+  const activeDeskTitle = await page.locator('#desk-home-title').textContent()
+  const activeEnvironmentTitle = await page.locator('.environment-banner h1').textContent()
   await page.screenshot({ path: path.join(outputDir, '01b-desktop-my-desk.png'), fullPage: true })
   await page.getByRole('button', { name: /Arena Player battles/i }).click()
   await page.getByLabel('Player 2 name').fill('Primo')
@@ -124,7 +126,7 @@ async function captureDesktop() {
     h1: document.querySelector('h1')?.textContent ?? null,
   }))
   await page.close()
-  return { metrics: { ...metrics, bubbleCount, marketCanvasCount, tutorialSteps, tutorialStillOpen, tutorialFinishedClosed, tutorialTitles, whaleLeaderboardCount, marketGenomeCount, receiptCount, orderCount, playerDeskCount, fkUsdcAfterRoundTrip }, errors }
+  return { metrics: { ...metrics, bubbleCount, marketCanvasCount, tutorialSteps, tutorialStillOpen, tutorialFinishedClosed, tutorialTitles, whaleLeaderboardCount, marketGenomeCount, receiptCount, orderCount, playerDeskCount, fkUsdcAfterRoundTrip, activeDeskTitle, activeEnvironmentTitle }, errors }
 }
 
 async function captureMobile() {
@@ -166,6 +168,7 @@ if (desktop.metrics.marketCanvasCount < 1 || mobile.metrics.canvasCount < 1) pro
 if (desktop.metrics.receiptCount < 1 || desktop.metrics.orderCount < 1) process.exitCode = 1
 if (!(desktop.metrics.fkUsdcAfterRoundTrip > 0 && desktop.metrics.fkUsdcAfterRoundTrip < 500)) process.exitCode = 1
 if (desktop.metrics.playerDeskCount !== 2 || desktop.metrics.tutorialSteps !== 8) process.exitCode = 1
+if (desktop.metrics.activeDeskTitle !== 'Ghostmint Research' || desktop.metrics.activeEnvironmentTitle !== 'My Desk') process.exitCode = 1
 if (desktop.metrics.environmentCount !== 6 || mobile.metrics.environmentCount !== 6) process.exitCode = 1
 if (desktop.metrics.whaleLeaderboardCount < 1 || desktop.metrics.marketGenomeCount < 1) process.exitCode = 1
 if (desktop.metrics.tutorialStillOpen !== 1 || desktop.metrics.tutorialFinishedClosed !== 0) process.exitCode = 1

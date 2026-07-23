@@ -4,12 +4,61 @@ export type InjectedWalletProvider = {
   removeListener?: (event: 'accountsChanged' | 'chainChanged', listener: (value: unknown) => void) => void
 }
 
+export type DiscoveredWallet = {
+  id: string
+  name: string
+  icon?: string
+  provider: InjectedWalletProvider
+}
+
+type Eip6963ProviderDetail = {
+  info: {
+    icon?: string
+    name: string
+    rdns: string
+    uuid: string
+  }
+  provider: InjectedWalletProvider
+}
+
 function provider() {
   return (window as Window & { ethereum?: InjectedWalletProvider }).ethereum
 }
 
 export function getInjectedWallet() {
   return provider()
+}
+
+export async function discoverInjectedWallets(waitMs = 180) {
+  const wallets = new Map<string, DiscoveredWallet>()
+
+  const announce = (event: Event) => {
+    const detail = (event as CustomEvent<Eip6963ProviderDetail>).detail
+    if (!detail?.provider || !detail.info?.name) return
+    const id = detail.info.rdns || detail.info.uuid
+    wallets.set(id, {
+      id,
+      name: detail.info.name,
+      icon: detail.info.icon,
+      provider: detail.provider,
+    })
+  }
+
+  window.addEventListener('eip6963:announceProvider', announce)
+  window.dispatchEvent(new Event('eip6963:requestProvider'))
+  await new Promise((resolve) => window.setTimeout(resolve, waitMs))
+  window.removeEventListener('eip6963:announceProvider', announce)
+
+  const legacy = provider()
+  if (legacy && ![...wallets.values()].some((wallet) => wallet.provider === legacy)) {
+    wallets.set('injected-wallet', {
+      id: 'injected-wallet',
+      name: 'Browser wallet',
+      provider: legacy,
+    })
+  }
+
+  return [...wallets.values()]
 }
 
 export async function readInjectedWallet() {
@@ -23,8 +72,8 @@ export async function readInjectedWallet() {
   return { address: accounts[0] ?? '', chainId }
 }
 
-export async function connectInjectedWallet() {
-  const wallet = provider()
+export async function connectInjectedWallet(selectedProvider?: InjectedWalletProvider) {
+  const wallet = selectedProvider ?? provider()
   if (!wallet) throw new Error('No injected EVM wallet was found in this browser.')
 
   const [accounts, chainId] = await Promise.all([
