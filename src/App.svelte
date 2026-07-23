@@ -573,7 +573,7 @@
         quantity: Math.max(0.1, qty),
         averageCostUsd: price,
         image: asset?.image ?? '',
-        source: 'seeded-trader',
+        source: 'paper-trade',
       }
     })
     const existingIds = new Set(seeded.map((s) => s.id))
