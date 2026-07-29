@@ -39,6 +39,7 @@
   import PaperPortfolio from './lib/PaperPortfolio.svelte'
   import PortfolioSetup from './lib/PortfolioSetup.svelte'
   import PlayerArena from './lib/PlayerArena.svelte'
+  import TournamentHub from './lib/TournamentHub.svelte'
   import TraderGallery from './lib/TraderGallery.svelte'
   import Tutorial from './lib/Tutorial.svelte'
   import FarcasterIdentity from './lib/FarcasterIdentity.svelte'
@@ -52,6 +53,7 @@
   import type { MiniAppRuntime } from './lib/miniapp'
   import { estimatePaperFee, scanConnectedWallet } from './lib/portfolio'
   import { trackBetaEvent } from './lib/telemetry'
+  import type { TournamentEntry } from './lib/tournament'
   import { chainName, connectInjectedWallet, getInjectedWallet, readInjectedWallet, shortAddress } from './lib/wallet'
   import type { InjectedWalletProvider } from './lib/wallet'
   import type { BattleReceipt, BubbleMetric, ChartPoint, MarketAsset, MarketWindow, Member, OrderBookLevel, PaperFeeQuote, PaperOrder, PaperOrderSide, PaperOrderType, PaperPosition, WalletHolding } from './lib/types'
@@ -137,6 +139,8 @@
   let latestFeeQuote: PaperFeeQuote | null = null
   let paperPlanReady = false
   let activeEnvironment: Environment = 'markets'
+  let arenaPreferredMode: 'players' | 'practice' = 'players'
+  let tournamentEntry: TournamentEntry | null = null
   let researchView: ResearchView = 'sources'
   const reownConfigured = hasReownProject()
   const farcasterManifestReady = import.meta.env.VITE_FARCASTER_MANIFEST_READY === 'true'
@@ -450,6 +454,39 @@
       paper_stake: receipt.paperStake,
       funds_moved: receipt.fundsMoved,
     })
+  }
+
+  function openArenaMode(mode: 'players' | 'practice') {
+    arenaPreferredMode = mode
+    navigateEnvironment('arena')
+    window.setTimeout(() => document.getElementById('arena')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120)
+  }
+
+  function recordTournamentEnrollment(source: 'founder' | 'invite') {
+    trackBetaEvent('tournament_enrolled', { source, season: 'founder-cup-0' })
+  }
+
+  function recordTournamentInvite(action: 'created' | 'copied' | 'shared') {
+    const eventName = action === 'created'
+      ? 'tournament_invite_created'
+      : action === 'copied'
+        ? 'tournament_invite_copied'
+        : 'tournament_invite_shared'
+    trackBetaEvent(eventName, { season: 'founder-cup-0' })
+  }
+
+  function recordTournamentRoundStart(round: { mode: 'players' | 'practice'; paperStake: number; roundLengthSeconds: number }) {
+    if (!tournamentEntry) return
+    trackBetaEvent('tournament_round_started', {
+      mode: round.mode,
+      paper_stake: round.paperStake,
+      round_length_seconds: round.roundLengthSeconds,
+      season: 'founder-cup-0',
+    })
+  }
+
+  function setTournamentEntry(entry: TournamentEntry | null) {
+    tournamentEntry = entry
   }
 
   function closeTutorial(completed: boolean) {
@@ -1195,6 +1232,17 @@
       {/if}
 
       {:else if activeEnvironment === 'arena'}
+      <TournamentHub
+        {member}
+        {receipts}
+        onrequirejoin={() => (showJoin = true)}
+        onpractice={() => openArenaMode('practice')}
+        onplayers={() => openArenaMode('players')}
+        onledger={() => navigateEnvironment('ledger')}
+        onenroll={recordTournamentEnrollment}
+        oninvite={recordTournamentInvite}
+        onentrychange={setTournamentEntry}
+      />
       <PlayerArena
         {assets}
         {member}
@@ -1202,8 +1250,12 @@
         maxStake={paperBalance}
         practiceAssetId={benchmarkSignal?.asset.id ?? 'bitcoin'}
         practiceDirection={benchmarkSignal?.direction === 'SHORT BIAS' ? 'short' : 'long'}
+        preferredMode={arenaPreferredMode}
+        seasonId={tournamentEntry?.seasonId ?? ''}
         onrequirejoin={() => (showJoin = true)}
         onreceipt={recordBattleReceipt}
+        onmodechange={(mode) => (arenaPreferredMode = mode)}
+        onroundstart={recordTournamentRoundStart}
       />
 
       {:else if activeEnvironment === 'execute'}

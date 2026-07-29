@@ -160,6 +160,7 @@ export type PaperFeeQuote = {
 export type BattleReceipt = {
   id: string
   hash: string
+  seasonId?: string
   openedAt: string
   closedAt: string
   mode: 'players' | 'practice'

@@ -10,12 +10,17 @@
   export let maxStake = 10_000
   export let practiceAssetId = 'bitcoin'
   export let practiceDirection: TradeDirection = 'long'
+  export let preferredMode: BattleMode = 'players'
+  export let seasonId = ''
   export let onrequirejoin: () => void
   export let onreceipt: (receipt: BattleReceipt) => void
+  export let onmodechange: (mode: BattleMode) => void
+  export let onroundstart: (round: { mode: BattleMode; paperStake: number; roundLengthSeconds: number }) => void
 
   type BattleMode = 'players' | 'practice'
   type ActiveRound = {
     id: string
+    seasonId?: string
     openedAt: string
     closesAt: number
     mode: BattleMode
@@ -57,6 +62,7 @@
   $: activeOpponentAsset = resolveAsset(activeRound?.opponentAssetId, opponentAsset)
   $: liveHostReturn = activeRound ? directionalReturn(activeRound.hostEntry, activeHostAsset.price, activeRound.hostDirection) : 0
   $: liveOpponentReturn = activeRound ? directionalReturn(activeRound.opponentEntry, activeOpponentAsset.price, activeRound.opponentDirection) : 0
+  $: if (!activeRound && preferredMode !== mode) setMode(preferredMode, false)
 
   onMount(() => {
     timer = setInterval(() => {
@@ -67,7 +73,7 @@
     return () => { if (timer) clearInterval(timer) }
   })
 
-  function setMode(nextMode: BattleMode) {
+  function setMode(nextMode: BattleMode, notify = true) {
     if (activeRound) return
     mode = nextMode
     errorMessage = ''
@@ -79,6 +85,7 @@
     } else if (opponentName === 'DOW JONES') {
       opponentName = ''
     }
+    if (notify) onmodechange(nextMode)
   }
 
   function createChallenge() {
@@ -104,6 +111,7 @@
     paperStake = stake
     activeRound = {
       id: crypto.randomUUID(),
+      seasonId: seasonId || undefined,
       openedAt: new Date().toISOString(),
       closesAt: Date.now() + Number(roundLength) * 1000,
       mode,
@@ -122,6 +130,7 @@
     }
     secondsRemaining = Number(roundLength)
     errorMessage = ''
+    onroundstart({ mode, paperStake: stake, roundLengthSeconds: Number(roundLength) })
   }
 
   function directionalReturn(entry: number, current: number, direction: TradeDirection) {
@@ -145,6 +154,7 @@
     const hostHypotheticalPnl = Number((round.paperStake * (margin / 100)).toFixed(2))
     const unsigned: Omit<BattleReceipt, 'hash'> = {
       id: round.id,
+      seasonId: round.seasonId,
       openedAt: round.openedAt,
       closedAt: new Date().toISOString(),
       mode: round.mode,

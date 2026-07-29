@@ -177,11 +177,19 @@ async function captureDesktop() {
   const activeEnvironmentTitle = await page.locator('.environment-banner h1').textContent()
   await page.screenshot({ path: path.join(outputDir, '01b-desktop-my-desk.png'), fullPage: true })
   await page.locator('.environment-nav button').filter({ hasText: 'Arena' }).click()
+  await page.waitForSelector('.tournament-hub')
+  const emptyStandingsMessageCount = await page.getByText('No manufactured leaderboard', { exact: true }).count()
+  await page.getByRole('button', { name: /Enter Founder Cup/i }).click()
+  await page.waitForSelector('.invite-strip')
+  const tournamentInviteCount = await page.locator('.invite-strip').count()
   await page.getByLabel('Player 2 name').fill('Primo')
   await page.getByRole('button', { name: /Start player match/i }).click()
   await page.waitForTimeout(500)
   await page.getByRole('button', { name: /Settle round now/i }).click()
+  await page.waitForSelector('.standings-row:not(.standings-labels)')
   const playerDeskCount = await page.locator('.player-desk').count()
+  const tournamentStandingCount = await page.locator('.standings-row:not(.standings-labels)').count()
+  await page.screenshot({ path: path.join(outputDir, '01d-desktop-founder-cup.png'), fullPage: true })
   await page.locator('.environment-nav button').filter({ hasText: 'Paper Trade' }).click()
   await page.screenshot({ path: path.join(outputDir, '01c-desktop-paper-trade.png'), fullPage: true })
   await page.getByRole('button', { name: /MARKET/ }).last().click()
@@ -213,7 +221,33 @@ async function captureDesktop() {
     h1: document.querySelector('h1')?.textContent ?? null,
   }))
   await page.close()
-  return { metrics: { ...metrics, bubbleCount, bubbleMaxDrift, bubbleSpread, bubbleTerminalOverlap, bubbleLabelOverflowCount, marketCanvasCount, tutorialSteps, tutorialStillOpen, tutorialFinishedClosed, tutorialTitles, whaleLeaderboardCount, marketGenomeCount, receiptCount, orderCount, playerDeskCount, fkUsdcAfterRoundTrip, activeDeskTitle, activeEnvironmentTitle }, errors }
+  return {
+    metrics: {
+      ...metrics,
+      bubbleCount,
+      bubbleMaxDrift,
+      bubbleSpread,
+      bubbleTerminalOverlap,
+      bubbleLabelOverflowCount,
+      marketCanvasCount,
+      tutorialSteps,
+      tutorialStillOpen,
+      tutorialFinishedClosed,
+      tutorialTitles,
+      whaleLeaderboardCount,
+      marketGenomeCount,
+      receiptCount,
+      orderCount,
+      playerDeskCount,
+      fkUsdcAfterRoundTrip,
+      activeDeskTitle,
+      activeEnvironmentTitle,
+      emptyStandingsMessageCount,
+      tournamentInviteCount,
+      tournamentStandingCount,
+    },
+    errors,
+  }
 }
 
 async function captureMobile() {
@@ -240,6 +274,21 @@ async function captureMobile() {
       right: rect.right,
     }
   })
+  await page.locator('.environment-nav button').filter({ hasText: 'Arena' }).click()
+  await page.waitForSelector('.tournament-hub')
+  await page.getByRole('button', { name: /Enter Founder Cup/i }).click()
+  await page.waitForSelector('.invite-strip')
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.screenshot({ path: path.join(outputDir, '03b-mobile-founder-cup.png'), fullPage: true })
+  const tournamentMetrics = await page.locator('.tournament-hub').evaluate((element) => {
+    const rect = element.getBoundingClientRect()
+    return {
+      count: 1,
+      left: rect.left,
+      right: rect.right,
+      inviteCount: element.querySelectorAll('.invite-strip').length,
+    }
+  })
   await page.locator('.environment-nav button').filter({ hasText: 'Markets' }).click()
   await page.waitForSelector('.market-bubble')
   await page.waitForTimeout(2500)
@@ -255,6 +304,9 @@ async function captureMobile() {
     ...pageMetrics,
     runwayStepCount: runwayMetrics.stepCount,
     runwayWithinViewport: runwayMetrics.left >= 0 && runwayMetrics.right <= pageMetrics.viewportWidth,
+    tournamentHubCount: tournamentMetrics.count,
+    tournamentInviteCount: tournamentMetrics.inviteCount,
+    tournamentWithinViewport: tournamentMetrics.left >= 0 && tournamentMetrics.right <= pageMetrics.viewportWidth,
   }
   await page.close()
   return { metrics, errors }
@@ -283,9 +335,19 @@ if (desktop.metrics.marketCanvasCount < 1 || mobile.metrics.canvasCount < 1) pro
 if (desktop.metrics.receiptCount < 1 || desktop.metrics.orderCount < 1) process.exitCode = 1
 if (!(desktop.metrics.fkUsdcAfterRoundTrip > 0 && desktop.metrics.fkUsdcAfterRoundTrip < 500)) process.exitCode = 1
 if (desktop.metrics.playerDeskCount !== 2 || desktop.metrics.tutorialSteps !== 8) process.exitCode = 1
+if (
+  desktop.metrics.emptyStandingsMessageCount !== 1
+  || desktop.metrics.tournamentInviteCount !== 1
+  || desktop.metrics.tournamentStandingCount !== 2
+) process.exitCode = 1
 if (desktop.metrics.activeDeskTitle !== 'Ghostmint Research' || desktop.metrics.activeEnvironmentTitle !== 'My Desk') process.exitCode = 1
 if (desktop.metrics.environmentCount !== 6 || mobile.metrics.environmentCount !== 6) process.exitCode = 1
 if (mobile.metrics.runwayStepCount !== 5 || !mobile.metrics.runwayWithinViewport) process.exitCode = 1
+if (
+  mobile.metrics.tournamentHubCount !== 1
+  || mobile.metrics.tournamentInviteCount !== 1
+  || !mobile.metrics.tournamentWithinViewport
+) process.exitCode = 1
 if (desktop.metrics.whaleLeaderboardCount < 1 || desktop.metrics.marketGenomeCount < 1) process.exitCode = 1
 if (
   desktop.metrics.bubbleMaxDrift > 0.5
