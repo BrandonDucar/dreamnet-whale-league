@@ -153,7 +153,7 @@ html[data-miniapp='true'] .topbar {
 .segmented button.active, .chart-ranges button.active { background: #2b1743; color: #e5c8ff; }
 .metric-select { height: 28px; margin-left: auto; display: flex; align-items: center; gap: 5px; padding: 0 7px; border: 1px solid var(--line); background: #080b0d; color: var(--muted); }
 .metric-select select { appearance: none; border: 0; outline: 0; background: transparent; color: #abb4b9; font: 600 9px/1 'IBM Plex Mono', monospace; }
-.market-canvas { height: 340px; }
+.market-canvas { height: clamp(420px, 46vh, 500px); }
 .market-legend { height: 26px; display: flex; align-items: center; gap: 16px; padding: 0 12px; color: var(--muted); border-top: 1px solid #171f23; font: 500 9px/1 'IBM Plex Mono', monospace; }
 .market-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .market-legend span:last-child { margin-left: auto; }

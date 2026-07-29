@@ -119,6 +119,50 @@ async function captureDesktop() {
   await page.waitForSelector('.market-bubble')
   await page.waitForTimeout(3500)
   const marketCanvasCount = await page.locator('canvas').count()
+  const bubbleLayoutBefore = await page.locator('.market-bubble').evaluateAll((bubbles) =>
+    bubbles.map((bubble) => {
+      const rect = bubble.getBoundingClientRect()
+      return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom }
+    }),
+  )
+  const bubbleField = await page.locator('.bubble-field').boundingBox()
+  await page.waitForTimeout(800)
+  const bubbleLayoutAfter = await page.locator('.market-bubble').evaluateAll((bubbles) =>
+    bubbles.map((bubble) => {
+      const rect = bubble.getBoundingClientRect()
+      return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom }
+    }),
+  )
+  const bubbleMaxDrift = bubbleLayoutBefore.reduce((max, bubble, index) => {
+    const next = bubbleLayoutAfter[index]
+    if (!next) return Number.POSITIVE_INFINITY
+    return Math.max(max, Math.hypot(next.left - bubble.left, next.top - bubble.top))
+  }, 0)
+  const bubbleSpread = bubbleField
+    ? {
+        width: (
+          Math.max(...bubbleLayoutAfter.map((bubble) => bubble.right))
+          - Math.min(...bubbleLayoutAfter.map((bubble) => bubble.left))
+        ) / bubbleField.width,
+        height: (
+          Math.max(...bubbleLayoutAfter.map((bubble) => bubble.bottom))
+          - Math.min(...bubbleLayoutAfter.map((bubble) => bubble.top))
+        ) / bubbleField.height,
+      }
+    : { width: 0, height: 0 }
+  const chartPanel = await page.locator('.chart-panel').boundingBox()
+  const bubbleTerminalOverlap = bubbleField && chartPanel
+    ? Math.max(0, bubbleField.y + bubbleField.height - chartPanel.y)
+    : Number.POSITIVE_INFINITY
+  const bubbleLabelOverflowCount = await page.locator('.market-bubble strong').evaluateAll((labels) =>
+    labels.filter((label) => {
+      const labelRect = label.getBoundingClientRect()
+      const bubbleRect = label.parentElement?.getBoundingClientRect()
+      return !bubbleRect
+        || labelRect.left < bubbleRect.left + 2
+        || labelRect.right > bubbleRect.right - 2
+    }).length,
+  )
   await page.screenshot({ path: path.join(outputDir, '01-desktop-market.png'), fullPage: true })
 
   await page.getByRole('button', { name: /Tour this workspace/i }).first().click()
@@ -169,7 +213,7 @@ async function captureDesktop() {
     h1: document.querySelector('h1')?.textContent ?? null,
   }))
   await page.close()
-  return { metrics: { ...metrics, bubbleCount, marketCanvasCount, tutorialSteps, tutorialStillOpen, tutorialFinishedClosed, tutorialTitles, whaleLeaderboardCount, marketGenomeCount, receiptCount, orderCount, playerDeskCount, fkUsdcAfterRoundTrip, activeDeskTitle, activeEnvironmentTitle }, errors }
+  return { metrics: { ...metrics, bubbleCount, bubbleMaxDrift, bubbleSpread, bubbleTerminalOverlap, bubbleLabelOverflowCount, marketCanvasCount, tutorialSteps, tutorialStillOpen, tutorialFinishedClosed, tutorialTitles, whaleLeaderboardCount, marketGenomeCount, receiptCount, orderCount, playerDeskCount, fkUsdcAfterRoundTrip, activeDeskTitle, activeEnvironmentTitle }, errors }
 }
 
 async function captureMobile() {
@@ -224,6 +268,13 @@ if (desktop.metrics.playerDeskCount !== 2 || desktop.metrics.tutorialSteps !== 8
 if (desktop.metrics.activeDeskTitle !== 'Ghostmint Research' || desktop.metrics.activeEnvironmentTitle !== 'My Desk') process.exitCode = 1
 if (desktop.metrics.environmentCount !== 6 || mobile.metrics.environmentCount !== 6) process.exitCode = 1
 if (desktop.metrics.whaleLeaderboardCount < 1 || desktop.metrics.marketGenomeCount < 1) process.exitCode = 1
+if (
+  desktop.metrics.bubbleMaxDrift > 0.5
+  || desktop.metrics.bubbleSpread.width < 0.8
+  || desktop.metrics.bubbleSpread.height < 0.75
+  || desktop.metrics.bubbleTerminalOverlap > 1
+  || desktop.metrics.bubbleLabelOverflowCount !== 0
+) process.exitCode = 1
 if (desktop.metrics.tutorialStillOpen !== 1 || desktop.metrics.tutorialFinishedClosed !== 0) process.exitCode = 1
 if (desktop.metrics.tutorialTitles.join('|') !== [
   'Start with the market map',
