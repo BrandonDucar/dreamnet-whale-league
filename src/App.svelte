@@ -33,6 +33,7 @@
     X,
   } from '@lucide/svelte'
   import { onMount } from 'svelte'
+  import BetaRunway from './lib/BetaRunway.svelte'
   import MarketBubbles from './lib/MarketBubbles.svelte'
   import MarketTerminal from './lib/MarketTerminal.svelte'
   import PaperPortfolio from './lib/PaperPortfolio.svelte'
@@ -50,6 +51,7 @@
   import { addWhaleLeagueMiniApp, initializeMiniApp, miniAppSelectionHaptic, shareWhaleLeague } from './lib/miniapp'
   import type { MiniAppRuntime } from './lib/miniapp'
   import { estimatePaperFee, scanConnectedWallet } from './lib/portfolio'
+  import { trackBetaEvent } from './lib/telemetry'
   import { chainName, connectInjectedWallet, getInjectedWallet, readInjectedWallet, shortAddress } from './lib/wallet'
   import type { InjectedWalletProvider } from './lib/wallet'
   import type { BattleReceipt, BubbleMetric, ChartPoint, MarketAsset, MarketWindow, Member, OrderBookLevel, PaperFeeQuote, PaperOrder, PaperOrderSide, PaperOrderType, PaperPosition, WalletHolding } from './lib/types'
@@ -128,10 +130,12 @@
   let walletProvider: InjectedWalletProvider | undefined = undefined
   let walletNotice = ''
   let walletHoldings: WalletHolding[] = []
+  let walletScanComplete = false
   let paperPositions: PaperPosition[] = []
   let paperStartingValue = 500
   let portfolioWalletAddress = ''
   let latestFeeQuote: PaperFeeQuote | null = null
+  let paperPlanReady = false
   let activeEnvironment: Environment = 'markets'
   let researchView: ResearchView = 'sources'
   const reownConfigured = hasReownProject()
@@ -155,18 +159,31 @@
   $: activeEnvironmentMeta = environments.find((environment) => environment.id === activeEnvironment) ?? environments[0]
 
   onMount(() => {
+    trackBetaEvent('app_opened', {
+      host: new URLSearchParams(window.location.search).get('miniApp') === 'true' ? 'farcaster' : 'web',
+      returning: Boolean(localStorage.getItem('whale-league-member')),
+    })
     void refreshMarket()
     const savedMember = localStorage.getItem('whale-league-member')
     const savedReceipts = localStorage.getItem('whale-player-battle-receipts-v2')
     const savedOrders = localStorage.getItem('whale-league-paper-orders')
     const savedPortfolio = localStorage.getItem('whale-league-paper-portfolio-v1')
     const savedWalletSelection = localStorage.getItem('whale-wallet-selection-v1')
+    const savedRiskProfile = localStorage.getItem('whale-risk-profile')
     if (savedMember) member = JSON.parse(savedMember) as Member
     if (savedReceipts) {
       receipts = JSON.parse(savedReceipts) as BattleReceipt[]
       latestReceipt = receipts[0] ?? null
     }
     if (savedOrders) paperOrders = JSON.parse(savedOrders) as PaperOrder[]
+    if (savedRiskProfile) {
+      try {
+        const profile = JSON.parse(savedRiskProfile) as { generatedPlan?: string }
+        paperPlanReady = Boolean(profile.generatedPlan)
+      } catch {
+        localStorage.removeItem('whale-risk-profile')
+      }
+    }
     if (savedPortfolio) {
       try {
         const snapshot = JSON.parse(savedPortfolio) as {
@@ -175,8 +192,10 @@
           startingValue?: number
           holdings?: WalletHolding[]
           positions?: PaperPosition[]
+          scanCompleted?: boolean
         }
         portfolioWalletAddress = snapshot.walletAddress ?? ''
+        walletScanComplete = snapshot.scanCompleted ?? Boolean(snapshot.holdings?.length)
         paperBalance = Number.isFinite(snapshot.cash) ? Number(snapshot.cash) : 500
         paperStartingValue = Number.isFinite(snapshot.startingValue) ? Number(snapshot.startingValue) : 500
         walletHoldings = snapshot.holdings ?? []
@@ -197,11 +216,18 @@
         localStorage.removeItem('whale-wallet-selection-v1')
       }
     }
-    if (!localStorage.getItem('whale-guided-tour-v3')) showTutorial = true
+    if (!localStorage.getItem('whale-guided-tour-v3')) {
+      showTutorial = true
+      trackBetaEvent('tutorial_opened', { source: 'first_run' })
+    }
 
     void initializeMiniApp().then((runtime) => {
       miniAppRuntime = runtime
       if (!runtime.inMiniApp) return
+      trackBetaEvent('miniapp_ready', {
+        added: runtime.added,
+        capability_count: runtime.capabilities.length,
+      })
       setFarcasterIdentity(runtime.identity)
       if (runtime.walletProvider) walletProvider = runtime.walletProvider
       miniAppNotice = runtime.added
@@ -357,6 +383,7 @@
       username: farcasterIdentity?.username,
     }
     localStorage.setItem('whale-league-member', JSON.stringify(member))
+    trackBetaEvent('desk_created', { auth_method: member.authMethod ?? 'local' })
     showJoin = false
     activeEnvironment = 'desk'
     walletNotice = `${member.teamName} is ready with 500 FKUSDC. Attach a wallet or build your paper plan next.`
@@ -372,6 +399,7 @@
     displayName = identity.displayName
     if (!teamName.trim()) teamName = `${identity.username}'s desk`
     joinError = ''
+    trackBetaEvent('identity_verified', { method: identity.verification })
   }
 
   async function addMiniApp() {
@@ -383,6 +411,7 @@
     }
     if (miniAppRuntime.inMiniApp) miniAppRuntime = { ...miniAppRuntime, added: true }
     miniAppNotice = 'Whale Intelligence League was added to Farcaster.'
+    trackBetaEvent('miniapp_added')
     await miniAppSelectionHaptic(miniAppRuntime.capabilities)
   }
 
@@ -392,7 +421,10 @@
     miniAppNotice = result?.cast
       ? 'Launch cast created.'
       : 'Composer closed without publishing.'
-    if (result?.cast) await miniAppSelectionHaptic(miniAppRuntime.capabilities)
+    if (result?.cast) {
+      trackBetaEvent('miniapp_shared')
+      await miniAppSelectionHaptic(miniAppRuntime.capabilities)
+    }
   }
 
   async function startEmailIdentity() {
@@ -412,15 +444,23 @@
     paperBalance = Number((paperBalance + receipt.hostHypotheticalPnl).toFixed(2))
     localStorage.setItem('whale-player-battle-receipts-v2', JSON.stringify(receipts))
     persistPaperPortfolio()
+    trackBetaEvent('battle_receipt_created', {
+      mode: receipt.mode,
+      data_mode: receipt.dataMode,
+      paper_stake: receipt.paperStake,
+      funds_moved: receipt.fundsMoved,
+    })
   }
 
   function closeTutorial(completed: boolean) {
     showTutorial = false
     localStorage.setItem('whale-guided-tour-v3', completed ? 'completed' : 'dismissed')
+    trackBetaEvent(completed ? 'tutorial_completed' : 'tutorial_dismissed')
   }
 
   function navigateEnvironment(environment: Environment) {
     activeEnvironment = environment
+    trackBetaEvent('environment_opened', { environment })
     requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }))
   }
 
@@ -432,6 +472,12 @@
   function openTutorial() {
     activeEnvironment = 'markets'
     showTutorial = true
+    trackBetaEvent('tutorial_opened', { source: 'workspace' })
+  }
+
+  function handlePaperPlanCreated() {
+    paperPlanReady = true
+    trackBetaEvent('paper_plan_created', { source: 'strategy_intake' })
   }
 
   function persistPaperPortfolio() {
@@ -441,6 +487,7 @@
       startingValue: paperStartingValue,
       holdings: walletHoldings,
       positions: paperPositions,
+      scanCompleted: walletScanComplete,
       updatedAt: new Date().toISOString(),
     }))
   }
@@ -462,6 +509,7 @@
     if (!nextAddress || !portfolioWalletAddress || nextAddress.toLowerCase() === portfolioWalletAddress.toLowerCase()) return
     portfolioWalletAddress = nextAddress
     walletHoldings = []
+    walletScanComplete = false
     paperPositions = []
     paperBalance = 500
     paperStartingValue = 500
@@ -471,6 +519,7 @@
 
   function handleHoldings(holdings: WalletHolding[]) {
     walletHoldings = holdings
+    walletScanComplete = true
     portfolioWalletAddress = walletAddress
     paperBalance = 500
     paperPositions = holdings.map((holding) => {
@@ -492,6 +541,10 @@
     paperStartingValue = Number((500 + holdings.reduce((sum, holding) => sum + holding.valueUsd, 0)).toFixed(2))
     persistPaperPortfolio()
     walletNotice = `Paper portfolio reset from ${holdings.length} read-only holding${holdings.length === 1 ? '' : 's'} plus 500 FKUSDC.`
+    trackBetaEvent('wallet_scan_completed', {
+      holding_count: holdings.length,
+      supported_value_bucket: holdings.reduce((sum, holding) => sum + holding.valueUsd, 0) > 10_000 ? '10000_plus' : holdings.length ? 'under_10000' : 'empty',
+    })
   }
 
   async function importWalletSnapshot(address: string, chainId: string, provider?: InjectedWalletProvider) {
@@ -505,6 +558,7 @@
         : `No non-zero supported balances were found on ${chainName(chainId)}. Your 500 FKUSDC practice balance is ready.`
     } catch (error) {
       walletNotice = error instanceof Error ? `Wallet scan failed: ${error.message}` : 'Wallet scan failed.'
+      trackBetaEvent('wallet_scan_failed', { chain: chainName(chainId) })
     }
   }
 
@@ -619,6 +673,11 @@
     paperPositions = [...seeded, ...paperPositions.filter((p) => !existingIds.has(p.id))]
     persistPaperPortfolio()
     walletNotice = `Seeded ${trader.name}'s ${seeded.length} active positions into your paper desk!`
+    trackBetaEvent('trader_template_seeded', {
+      template_id: trader.id,
+      position_count: seeded.length,
+      market: trader.market,
+    })
   }
 
   async function settlePaperSwap() {
@@ -719,7 +778,10 @@
     let feeQuote: PaperFeeQuote | null = null
     if (status === 'filled') {
       const settled = await settlePaperTrade(selectedAsset, orderSide, amountUsd)
-      if (!settled) return
+      if (!settled) {
+        trackBetaEvent('paper_order_blocked', { order_type: orderType, side: orderSide })
+        return
+      }
       feeQuote = latestFeeQuote
     } else {
       const nativeAsset = assets.find((asset) => asset.symbol === 'ETH')
@@ -754,6 +816,15 @@
     const order = { ...unsigned, hash: await sha256(JSON.stringify(unsigned)) }
     paperOrders = [order, ...paperOrders].slice(0, 20)
     localStorage.setItem('whale-league-paper-orders', JSON.stringify(paperOrders))
+    trackBetaEvent('paper_order_recorded', {
+      asset: selectedAsset.symbol,
+      order_type: order.type,
+      side: order.side,
+      status: order.status,
+      amount_bucket: amountUsd >= 1_000 ? '1000_plus' : amountUsd >= 250 ? '250_999' : 'under_250',
+      funds_moved: order.fundsMoved,
+      fee_mode: feeQuote?.mode ?? 'unknown',
+    })
   }
 
   async function recordPaperSwap() {
@@ -784,6 +855,13 @@
     const order = { ...unsigned, hash: await sha256(JSON.stringify(unsigned)) }
     paperOrders = [order, ...paperOrders].slice(0, 20)
     localStorage.setItem('whale-league-paper-orders', JSON.stringify(paperOrders))
+    trackBetaEvent('paper_swap_recorded', {
+      from_asset: order.symbol,
+      to_asset: order.toSymbol ?? '',
+      network: order.network ?? '',
+      funds_moved: order.fundsMoved,
+      fee_mode: latestFeeQuote?.mode ?? 'unknown',
+    })
   }
 
   async function processPaperOrders(nextAssets: MarketAsset[]) {
@@ -852,10 +930,12 @@
       if (!teamName.trim()) teamName = 'My trading desk'
       joinError = ''
       walletNotice = `Email identity verified with ${shortAddress(connection.address)}. Name your desk to continue.`
+      trackBetaEvent('identity_verified', { method: 'reown_email' })
     } else {
       showWallet = false
       activeEnvironment = 'desk'
       walletNotice = `Connected ${shortAddress(connection.address)} on ${chainName(connection.chainId)}. Trading authority has not been granted.`
+      trackBetaEvent('wallet_connected', { connector: 'reown', chain: chainName(connection.chainId) })
       void importWalletSnapshot(connection.address, connection.chainId, connection.provider)
     }
     reownIntent = ''
@@ -884,6 +964,7 @@
       showWallet = false
       activeEnvironment = 'desk'
       walletNotice = `Connected ${shortAddress(walletAddress)} on ${chainName(walletChainId)}. Trading authority has not been granted.`
+      trackBetaEvent('wallet_connected', { connector: 'injected', chain: chainName(walletChainId) })
       void importWalletSnapshot(connection.address, connection.chainId, selectedProvider)
     } catch (error) {
       walletNotice = error instanceof Error ? error.message : 'Wallet connection failed.'
@@ -901,6 +982,7 @@
     showWallet = false
     activeEnvironment = 'desk'
     walletNotice = `Watching ${shortAddress(address)} on ${chainName(chainId)}. No wallet connection or signing permission was requested.`
+    trackBetaEvent('wallet_watched', { chain: chainName(chainId) })
     void importWalletSnapshot(address, chainId)
   }
 
@@ -1069,7 +1151,29 @@
           <button class="create-desk-button" type="button" onclick={() => (showJoin = true)}><UserRound size={16} /> Create paper desk</button>
         {/if}
       </section>
-      <PortfolioSetup {walletAddress} {walletChainId} {walletProvider} {assets} initialHoldings={walletHoldings} onconnect={() => (showWallet = true)} onholdings={handleHoldings} />
+      <BetaRunway
+        deskReady={Boolean(member)}
+        walletReady={walletScanComplete}
+        planReady={paperPlanReady}
+        tradeReady={paperOrders.length > 0}
+        battleReady={receipts.length > 0}
+        ondesk={() => member ? navigateEnvironment('desk') : (showJoin = true)}
+        onwallet={() => (showWallet = true)}
+        onplan={() => document.getElementById('portfolio')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+        ontrade={() => navigateEnvironment('execute')}
+        onbattle={() => navigateEnvironment('arena')}
+        onledger={() => navigateEnvironment('ledger')}
+      />
+      <PortfolioSetup
+        {walletAddress}
+        {walletChainId}
+        {walletProvider}
+        {assets}
+        initialHoldings={walletHoldings}
+        onconnect={() => (showWallet = true)}
+        onholdings={handleHoldings}
+        onplan={handlePaperPlanCreated}
+      />
       <PaperPortfolio
         {walletAddress}
         positions={paperPositions}

@@ -60,7 +60,7 @@ Installed Phantom, MetaMask, Base, and other EIP-6963 wallets can connect direct
 Copy-Item .env.example .env.local
 ```
 
-Set `VITE_REOWN_PROJECT_ID` to the public project identifier from the [Reown dashboard](https://dashboard.reown.com). Add both the local development origin and `https://dreamnet-whale-league.pages.dev` to that project's allowed domains. The identifier is public configuration, not a wallet private key or signing secret.
+Set `VITE_REOWN_PROJECT_ID` to the public project identifier from the [Reown dashboard](https://dashboard.reown.com). Add both the local development origin and `https://whale.dreamnet.ink` to that project's allowed domains. The identifier is public configuration, not a wallet private key or signing secret.
 
 During the paper beta, wallet connections request only the public account address and balances. The app does not request transaction signatures or live trading authority.
 

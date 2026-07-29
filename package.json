@@ -9,7 +9,7 @@
     "build": "vite build",
     "farcaster:preflight": "node scripts/farcaster-preflight.mjs",
     "preview": "vite preview",
-    "test": "tsx tests/portfolio.test.ts",
+    "test": "tsx tests/portfolio.test.ts && tsx tests/telemetry.test.ts",
     "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
     "qa:visual": "node scripts/visual-qa.mjs"
   },

@@ -2,11 +2,11 @@
 
 Production URL:
 
-`https://dreamnet-whale-league.pages.dev/`
+`https://whale.dreamnet.ink/`
 
 Mini App launch URL:
 
-`https://dreamnet-whale-league.pages.dev/?miniApp=true`
+`https://whale.dreamnet.ink/?miniApp=true`
 
 ## Implemented
 
@@ -34,7 +34,7 @@ Farcaster requires a signed account association for the exact production
 domain. Generate it while signed into the `ghostmintops` Farcaster account:
 
 1. Open `https://farcaster.xyz/~/developers/mini-apps/manifest`.
-2. Use the domain `dreamnet-whale-league.pages.dev`.
+2. Use the domain `whale.dreamnet.ink`.
 3. Enter the Mini App metadata below.
 4. Download or copy the complete manifest.
 5. Save it as `public/.well-known/farcaster.json`.
@@ -51,14 +51,14 @@ Do not set the manifest-ready flag before the signed file passes the preflight.
 {
   "version": "1",
   "name": "Whale Intelligence League",
-  "homeUrl": "https://dreamnet-whale-league.pages.dev/?miniApp=true",
-  "iconUrl": "https://dreamnet-whale-league.pages.dev/whale-league-icon.png",
-  "splashImageUrl": "https://dreamnet-whale-league.pages.dev/whale-league-splash.png",
+  "homeUrl": "https://whale.dreamnet.ink/?miniApp=true",
+  "iconUrl": "https://whale.dreamnet.ink/whale-league-icon.png",
+  "splashImageUrl": "https://whale.dreamnet.ink/whale-league-splash.png",
   "splashBackgroundColor": "#07060c",
   "subtitle": "Paper trading battle arena",
   "description": "Explore live markets, rehearse trades, study public whale activity, and compete in receipted player-versus-player paper rounds.",
   "screenshotUrls": [
-    "https://dreamnet-whale-league.pages.dev/whale-league-screenshot.png"
+    "https://whale.dreamnet.ink/whale-league-screenshot.png"
   ],
   "primaryCategory": "finance",
   "tags": [
@@ -68,12 +68,12 @@ Do not set the manifest-ready flag before the signed file passes the preflight.
     "competition",
     "research"
   ],
-  "heroImageUrl": "https://dreamnet-whale-league.pages.dev/whale-league-wide.png",
+  "heroImageUrl": "https://whale.dreamnet.ink/whale-league-wide.png",
   "tagline": "Trade the tape, not the hype",
   "ogTitle": "Whale Intelligence League",
   "ogDescription": "Live market intelligence and receipted paper trading battles.",
-  "ogImageUrl": "https://dreamnet-whale-league.pages.dev/whale-league-wide.png",
-  "canonicalDomain": "dreamnet-whale-league.pages.dev",
+  "ogImageUrl": "https://whale.dreamnet.ink/whale-league-wide.png",
+  "canonicalDomain": "whale.dreamnet.ink",
   "noindex": false,
   "requiredCapabilities": [
     "actions.ready"

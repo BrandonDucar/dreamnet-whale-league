@@ -227,17 +227,35 @@ async function captureMobile() {
   await page.waitForSelector('.tutorial-modal[data-step-index="1"]')
   await page.screenshot({ path: path.join(outputDir, '00c-mobile-tutorial-step-2.png'), fullPage: false })
   await page.getByTestId('tutorial-close').click()
+  await page.locator('.environment-nav button').filter({ hasText: 'My Desk' }).click()
+  await page.waitForSelector('.beta-runway')
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.waitForTimeout(700)
+  await page.screenshot({ path: path.join(outputDir, '03a-mobile-desk.png'), fullPage: true })
+  const runwayMetrics = await page.locator('.beta-runway').evaluate((element) => {
+    const rect = element.getBoundingClientRect()
+    return {
+      stepCount: element.querySelectorAll('.runway-steps button').length,
+      left: rect.left,
+      right: rect.right,
+    }
+  })
   await page.locator('.environment-nav button').filter({ hasText: 'Markets' }).click()
   await page.waitForSelector('.market-bubble')
   await page.waitForTimeout(2500)
   await page.screenshot({ path: path.join(outputDir, '03-mobile-market.png'), fullPage: true })
-  const metrics = await page.evaluate(() => ({
+  const pageMetrics = await page.evaluate(() => ({
     viewportWidth: document.documentElement.clientWidth,
     scrollWidth: document.documentElement.scrollWidth,
     canvasCount: document.querySelectorAll('canvas').length,
     bubbleCount: document.querySelectorAll('.market-bubble').length,
     environmentCount: document.querySelectorAll('.environment-nav button').length,
   }))
+  const metrics = {
+    ...pageMetrics,
+    runwayStepCount: runwayMetrics.stepCount,
+    runwayWithinViewport: runwayMetrics.left >= 0 && runwayMetrics.right <= pageMetrics.viewportWidth,
+  }
   await page.close()
   return { metrics, errors }
 }
@@ -267,6 +285,7 @@ if (!(desktop.metrics.fkUsdcAfterRoundTrip > 0 && desktop.metrics.fkUsdcAfterRou
 if (desktop.metrics.playerDeskCount !== 2 || desktop.metrics.tutorialSteps !== 8) process.exitCode = 1
 if (desktop.metrics.activeDeskTitle !== 'Ghostmint Research' || desktop.metrics.activeEnvironmentTitle !== 'My Desk') process.exitCode = 1
 if (desktop.metrics.environmentCount !== 6 || mobile.metrics.environmentCount !== 6) process.exitCode = 1
+if (mobile.metrics.runwayStepCount !== 5 || !mobile.metrics.runwayWithinViewport) process.exitCode = 1
 if (desktop.metrics.whaleLeaderboardCount < 1 || desktop.metrics.marketGenomeCount < 1) process.exitCode = 1
 if (
   desktop.metrics.bubbleMaxDrift > 0.5

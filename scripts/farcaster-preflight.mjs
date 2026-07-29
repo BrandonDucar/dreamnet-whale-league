@@ -63,7 +63,7 @@ try {
     checks.push({
       name: 'signed account association',
       passed: false,
-      detail: 'sign dreamnet-whale-league.pages.dev in Farcaster Developer Tools',
+      detail: 'sign whale.dreamnet.ink in Farcaster Developer Tools',
     })
   } else {
     record(
@@ -75,7 +75,7 @@ try {
   record('manifest miniapp metadata', manifest.miniapp?.version === '1', 'miniapp.version must be 1')
   record(
     'manifest canonical domain',
-    manifest.miniapp?.canonicalDomain === 'dreamnet-whale-league.pages.dev',
+    manifest.miniapp?.canonicalDomain === 'whale.dreamnet.ink',
     'canonicalDomain must match the production host',
   )
   record(

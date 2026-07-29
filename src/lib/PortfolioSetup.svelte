@@ -13,6 +13,7 @@
   export let walletProvider: InjectedWalletProvider | undefined = undefined
   export let onconnect: () => void
   export let onholdings: (holdings: WalletHolding[]) => void
+  export let onplan: () => void
 
   type Experience = 'new' | 'active' | 'advanced'
   type Goal = 'learn' | 'growth' | 'income' | 'preservation'
@@ -97,6 +98,7 @@
     const leverageLabel = Number(leverageCeiling) <= 1 ? 'no leverage' : `leverage capped at ${Number(leverageCeiling).toFixed(1)}x`
     generatedPlan = `${riskLabel}; ${horizon} horizon; ${automationLabel}; $${Math.max(1, Number(maxDailyLoss)).toFixed(0)} daily loss stop; ${Math.max(1, Number(maxPositionPct)).toFixed(1)}% maximum position; ${leverageLabel}.`
     localStorage.setItem('whale-risk-profile', JSON.stringify({ experience, goal, risk, horizon, automation, maxDailyLoss, maxPositionPct, leverageCeiling, generatedPlan, updatedAt: new Date().toISOString() }))
+    onplan()
   }
 </script>
 
