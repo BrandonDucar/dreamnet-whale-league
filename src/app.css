@@ -21,6 +21,10 @@
   --hot: #ff2f92;
   --lime: #c7ff3d;
   --rail: 58px;
+  --miniapp-safe-top: 0px;
+  --miniapp-safe-right: 0px;
+  --miniapp-safe-bottom: 0px;
+  --miniapp-safe-left: 0px;
   color-scheme: dark;
 }
 
@@ -31,7 +35,13 @@ button, input, select { font: inherit; letter-spacing: 0; }
 button, a { -webkit-tap-highlight-color: transparent; }
 button { color: inherit; }
 a { color: inherit; text-decoration: none; }
-.terminal-shell { min-height: 100vh; background: var(--bg); }
+.terminal-shell {
+  min-height: 100vh;
+  padding-right: var(--miniapp-safe-right);
+  padding-bottom: var(--miniapp-safe-bottom);
+  padding-left: var(--miniapp-safe-left);
+  background: var(--bg);
+}
 .positive { color: var(--green) !important; }
 .negative { color: var(--red) !important; }
 
@@ -60,6 +70,8 @@ a { color: inherit; text-decoration: none; }
 .feed-status.feed-live > span { background: var(--green); box-shadow: 0 0 8px rgba(40, 211, 143, .65); }
 .icon-button { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 3px; background: #11161a; cursor: pointer; }
 .icon-button:hover { border-color: var(--line-bright); background: #182027; }
+.icon-action { width: 32px; height: 32px; flex: 0 0 auto; display: grid; place-items: center; padding: 0; border: 1px solid #6045a0; border-radius: 3px; background: #1b1230; color: #cdbdff; cursor: pointer; }
+.icon-action:hover { border-color: #b59bff; background: #2b1a4e; color: #fff; }
 .guided-tour-button { min-height: 32px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; border: 1px solid var(--hot); border-radius: 3px; background: #2b1022; color: #ff9dca; cursor: pointer; font: 700 9px/1 'IBM Plex Mono', monospace; }
 .guided-tour-button:hover { background: var(--hot); color: #19020d; }
 .account-button, .join-button { min-height: 32px; display: inline-flex; align-items: center; gap: 7px; padding: 0 11px; border-radius: 3px; cursor: pointer; }
@@ -67,6 +79,14 @@ a { color: inherit; text-decoration: none; }
 .join-button { border: 1px solid #8d43ff; background: #5624b6; color: #f4eaff; font-weight: 700; }
 .wallet-button { min-height: 32px; display: inline-flex; align-items: center; gap: 7px; padding: 0 10px; border: 1px solid #3d3652; border-radius: 3px; background: #171123; color: #d7c9ff; cursor: pointer; font: 700 9px/1 'IBM Plex Mono', monospace; }
 .wallet-button:hover, .wallet-button.connected { border-color: var(--cyan); color: var(--cyan); }
+.miniapp-notice { width: 100%; min-height: 30px; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 5px 12px; border: 0; border-bottom: 1px solid #6045a0; background: #171025; color: #cdbdff; cursor: pointer; font: 700 8px/1.3 'IBM Plex Mono', monospace; }
+.miniapp-notice span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.miniapp-notice svg:last-child { margin-left: 3px; color: #8d7eaa; }
+
+html[data-miniapp='true'] .topbar {
+  height: calc(52px + var(--miniapp-safe-top));
+  padding-top: var(--miniapp-safe-top);
+}
 
 .market-ticker { height: 31px; overflow: hidden; border-bottom: 1px solid var(--line); background: #080b0d; white-space: nowrap; }
 .ticker-track { display: flex; min-width: max-content; height: 100%; }
@@ -74,7 +94,7 @@ a { color: inherit; text-decoration: none; }
 .ticker-track button:hover { background: #12181c; }
 .ticker-track button span:nth-child(2) { color: #a8b1b6; }
 
-.environment-nav { position: sticky; top: 52px; z-index: 25; min-height: 50px; display: grid; grid-template-columns: repeat(6, minmax(104px, 1fr)); border-bottom: 1px solid var(--line); background: #09080e; }
+.environment-nav { position: sticky; top: calc(52px + var(--miniapp-safe-top)); z-index: 25; min-height: 50px; display: grid; grid-template-columns: repeat(6, minmax(104px, 1fr)); border-bottom: 1px solid var(--line); background: #09080e; }
 .environment-nav button { min-width: 0; min-height: 50px; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 10px; border: 0; border-right: 1px solid var(--line); border-bottom: 3px solid transparent; background: transparent; color: #777387; cursor: pointer; text-align: left; }
 .environment-nav button:last-child { border-right: 0; }
 .environment-nav button:hover { background: #12101a; color: var(--text); }

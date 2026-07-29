@@ -11,6 +11,7 @@
   export let onexternal: (choice: ReownChoice) => Promise<void>
   export let onwatch: (address: string, chainId: string) => void
   export let reownConfigured = false
+  export let hostWallet: InjectedWalletProvider | undefined = undefined
 
   let wallets: DiscoveredWallet[] = []
   let discoveryComplete = false
@@ -113,6 +114,13 @@
       <div class="wallet-options">
         <section class="primary-wallet-section">
           <div class="option-title"><span>01</span><div><strong>Choose your wallet</strong><small>Phantom, MetaMask, and Base stay at the top on every device.</small></div></div>
+          {#if hostWallet}
+            <button class="host-wallet" type="button" onclick={() => void connect({ id: 'farcaster-wallet', name: 'Farcaster wallet', provider: hostWallet })} disabled={Boolean(connectingId)}>
+              <span class="wallet-fallback"><WalletCards size={17} /></span>
+              <span><strong>Farcaster wallet</strong><small>Use the wallet already connected to this Mini App</small></span>
+              {#if connectingId === 'farcaster-wallet'}<span class="spin"><LoaderCircle size={16} /></span>{:else}<Check size={16} />{/if}
+            </button>
+          {/if}
           {#if !discoveryComplete}
             <div class="wallet-search"><span class="spin"><LoaderCircle size={18} /></span>Looking for installed wallets...</div>
           {:else}
@@ -188,6 +196,11 @@
   .option-title strong { font-size: 11px; }
   .option-title small { color: var(--muted); font-size: 8px; line-height: 1.4; }
   .wallet-search { min-height: 72px; display: flex; align-items: center; justify-content: center; gap: 9px; padding: 12px; border: 1px dashed #3c3948; color: #85808e; text-align: left; font-size: 9px; line-height: 1.45; }
+  .host-wallet { width: 100%; min-height: 52px; display: grid; grid-template-columns: 30px minmax(0, 1fr) 18px; align-items: center; gap: 9px; margin-bottom: 8px; padding: 0 10px; border: 1px solid #8665db; background: #19102c; color: var(--text); cursor: pointer; text-align: left; }
+  .host-wallet:hover { border-color: #b59bff; background: #241641; }
+  .host-wallet > span:nth-child(2) { display: grid; gap: 3px; }
+  .host-wallet small { color: #a99ac5; font: 600 7px/1.2 'IBM Plex Mono', monospace; }
+  .host-wallet > :global(svg:last-child) { color: var(--green); }
   .wallet-search span { display: grid; gap: 3px; }
   .preferred-wallets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
   .preferred-wallets button { min-height: 76px; display: grid; grid-template-rows: 30px auto 16px; justify-items: center; gap: 5px; padding: 9px 5px 7px; border: 1px solid var(--line); background: #0d1115; color: var(--text); cursor: pointer; text-align: center; }

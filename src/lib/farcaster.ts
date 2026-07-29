@@ -5,6 +5,7 @@ export type FarcasterIdentity = {
   displayName: string
   pfpUrl?: string
   custodyAddress?: string
+  verification: 'siwf' | 'miniapp-context'
   verifiedAddresses: string[]
 }
 
@@ -71,6 +72,7 @@ export async function signInWithFarcaster(
     displayName: status.data.displayName ?? status.data.username ?? `FID ${status.data.fid}`,
     pfpUrl: status.data.pfpUrl,
     custodyAddress: status.data.custody,
+    verification: 'siwf',
     verifiedAddresses: status.data.verifications ?? [],
   }
 }

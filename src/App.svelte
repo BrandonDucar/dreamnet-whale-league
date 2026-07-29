@@ -3,6 +3,7 @@
     Activity,
     ArrowDownUp,
     BarChart3,
+    BookmarkPlus,
     Bot,
     Check,
     ChevronDown,
@@ -22,6 +23,7 @@
     RefreshCw,
     RotateCcw,
     Search,
+    Share2,
     ShieldCheck,
     Swords,
     TrendingDown,
@@ -45,6 +47,8 @@
   import type { ReownChoice, ReownConnection } from './lib/appkit'
   import type { FarcasterIdentity as FarcasterIdentityData } from './lib/farcaster'
   import { buildFallbackBook, buildFallbackChart, changeFor, fallbackAssets, fetchChart, fetchMarket, fetchOrderBook, formatPrice } from './lib/market'
+  import { addWhaleLeagueMiniApp, initializeMiniApp, miniAppSelectionHaptic, shareWhaleLeague } from './lib/miniapp'
+  import type { MiniAppRuntime } from './lib/miniapp'
   import { estimatePaperFee, scanConnectedWallet } from './lib/portfolio'
   import { chainName, connectInjectedWallet, getInjectedWallet, readInjectedWallet, shortAddress } from './lib/wallet'
   import type { InjectedWalletProvider } from './lib/wallet'
@@ -89,6 +93,8 @@
   let showWallet = false
   let showTutorial = false
   let farcasterIdentity: FarcasterIdentityData | null = null
+  let miniAppRuntime: MiniAppRuntime = { added: false, capabilities: [], chains: [], inMiniApp: false }
+  let miniAppNotice = ''
   let emailIdentityAddress = ''
   let reownIntent: 'identity-email' | 'wallet' | '' = ''
   let reownUnsubscribe: (() => void) | undefined
@@ -129,6 +135,7 @@
   let activeEnvironment: Environment = 'markets'
   let researchView: ResearchView = 'sources'
   const reownConfigured = hasReownProject()
+  const farcasterManifestReady = import.meta.env.VITE_FARCASTER_MANIFEST_READY === 'true'
 
   $: selectedAsset = assets.find((asset) => asset.id === selectedAssetId) ?? assets[0]
   $: marketChange = changeFor(selectedAsset, marketWindow)
@@ -192,8 +199,18 @@
     }
     if (!localStorage.getItem('whale-guided-tour-v3')) showTutorial = true
 
+    void initializeMiniApp().then((runtime) => {
+      miniAppRuntime = runtime
+      if (!runtime.inMiniApp) return
+      setFarcasterIdentity(runtime.identity)
+      if (runtime.walletProvider) walletProvider = runtime.walletProvider
+      miniAppNotice = runtime.added
+        ? 'Running inside Farcaster.'
+        : 'Farcaster connected. Add the app for faster return access.'
+    }).catch(() => undefined)
+
     const wallet = getInjectedWallet()
-    walletProvider = wallet
+    if (!walletProvider) walletProvider = wallet
     const onAccountsChanged = (value: unknown) => {
       const accounts = Array.isArray(value) ? value as string[] : []
       const nextAddress = accounts[0] ?? ''
@@ -355,6 +372,27 @@
     displayName = identity.displayName
     if (!teamName.trim()) teamName = `${identity.username}'s desk`
     joinError = ''
+  }
+
+  async function addMiniApp() {
+    miniAppNotice = 'Opening Farcaster app controls…'
+    const result = await addWhaleLeagueMiniApp()
+    if (!result) {
+      miniAppNotice = 'Add request closed or unavailable in this Farcaster client.'
+      return
+    }
+    if (miniAppRuntime.inMiniApp) miniAppRuntime = { ...miniAppRuntime, added: true }
+    miniAppNotice = 'Whale Intelligence League was added to Farcaster.'
+    await miniAppSelectionHaptic(miniAppRuntime.capabilities)
+  }
+
+  async function shareMiniApp() {
+    miniAppNotice = 'Opening the Farcaster composer…'
+    const result = await shareWhaleLeague()
+    miniAppNotice = result?.cast
+      ? 'Launch cast created.'
+      : 'Composer closed without publishing.'
+    if (result?.cast) await miniAppSelectionHaptic(miniAppRuntime.capabilities)
   }
 
   async function startEmailIdentity() {
@@ -893,6 +931,12 @@
       <span class="feed-status" class:feed-live={dataStatus === 'live'}>
         <span></span>{dataStatus === 'live' ? 'LIVE FEED' : dataStatus === 'loading' ? 'SYNCING' : 'TEACHING FEED'}
       </span>
+      {#if miniAppRuntime.inMiniApp}
+        {#if farcasterManifestReady && !miniAppRuntime.added}
+          <button class="icon-action" type="button" onclick={() => void addMiniApp()} title="Add Whale League to Farcaster" aria-label="Add Whale League to Farcaster"><BookmarkPlus size={16} /></button>
+        {/if}
+        <button class="icon-action" type="button" onclick={() => void shareMiniApp()} title="Share Whale League in Farcaster" aria-label="Share Whale League in Farcaster"><Share2 size={16} /></button>
+      {/if}
       <button class="wallet-button" class:connected={walletAddress} type="button" onclick={() => (showWallet = true)} title={walletAddress ? `${walletMode === 'watch' ? 'Watching' : 'Connected'} ${walletAddress} on ${chainName(walletChainId)}` : 'Attach a wallet to your paper desk'}>
         <WalletCards size={16} /><span>{walletAddress ? shortAddress(walletAddress) : 'Connect wallet'}</span>
       </button>
@@ -903,6 +947,12 @@
       {/if}
     </div>
   </header>
+
+  {#if miniAppRuntime.inMiniApp && miniAppNotice}
+    <button class="miniapp-notice" type="button" onclick={() => (miniAppNotice = '')} title="Dismiss Farcaster status">
+      <Radio size={13} /><span>{miniAppNotice}</span><X size={12} />
+    </button>
+  {/if}
 
   <div class="market-ticker" aria-label="Market ticker">
     <div class="ticker-track">
@@ -1269,6 +1319,7 @@
   onconnect={connectWallet}
   onexternal={connectExternalWallet}
   onwatch={watchWallet}
+  hostWallet={miniAppRuntime.inMiniApp ? miniAppRuntime.walletProvider : undefined}
   {reownConfigured}
 />
 

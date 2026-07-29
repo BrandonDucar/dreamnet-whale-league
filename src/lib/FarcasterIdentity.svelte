@@ -63,7 +63,12 @@
     </button>
   {/if}
 
-  <div class="verification-note"><ShieldCheck size={14} />The Farcaster signature and FID are verified before the desk is created.</div>
+  <div class="verification-note">
+    <ShieldCheck size={14} />
+    {identity?.verification === 'miniapp-context'
+      ? 'Identity supplied by the Farcaster Mini App host. Sensitive server actions require Quick Auth.'
+      : 'The Farcaster signature and FID are verified before the desk is created.'}
+  </div>
   {#if error}<div class="auth-error" role="alert">{error}</div>{/if}
 </section>
 

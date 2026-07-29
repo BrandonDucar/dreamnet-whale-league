@@ -1,0 +1,35 @@
+{
+  "miniapp": {
+    "version": "1",
+    "name": "Whale Intelligence League",
+    "homeUrl": "https://dreamnet-whale-league.pages.dev/?miniApp=true",
+    "iconUrl": "https://dreamnet-whale-league.pages.dev/whale-league-icon.png",
+    "imageUrl": "https://dreamnet-whale-league.pages.dev/whale-league-feed.png",
+    "buttonTitle": "Enter the paper arena",
+    "splashImageUrl": "https://dreamnet-whale-league.pages.dev/whale-league-splash.png",
+    "splashBackgroundColor": "#07060c",
+    "subtitle": "Paper trading battle arena",
+    "description": "Explore live markets, rehearse trades, study public whale activity, and compete in receipted player-versus-player paper rounds.",
+    "screenshotUrls": [
+      "https://dreamnet-whale-league.pages.dev/whale-league-screenshot.png"
+    ],
+    "primaryCategory": "finance",
+    "tags": [
+      "papertrading",
+      "markets",
+      "wallets",
+      "competition",
+      "research"
+    ],
+    "heroImageUrl": "https://dreamnet-whale-league.pages.dev/whale-league-wide.png",
+    "tagline": "Trade the tape, not the hype",
+    "ogTitle": "Whale Intelligence League",
+    "ogDescription": "Live market intelligence and receipted paper trading battles.",
+    "ogImageUrl": "https://dreamnet-whale-league.pages.dev/whale-league-wide.png",
+    "canonicalDomain": "dreamnet-whale-league.pages.dev",
+    "noindex": false,
+    "requiredCapabilities": [
+      "actions.ready"
+    ]
+  }
+}
