@@ -192,6 +192,14 @@ async function captureDesktop() {
   await page.screenshot({ path: path.join(outputDir, '01d-desktop-founder-cup.png'), fullPage: true })
   await page.locator('.environment-nav button').filter({ hasText: 'Paper Trade' }).click()
   await page.screenshot({ path: path.join(outputDir, '01c-desktop-paper-trade.png'), fullPage: true })
+  const tradingTrapperCount = await page.locator('.trapper-builder').count()
+  await page.getByRole('button', { name: /Build from this chart/i }).click()
+  await page.waitForSelector('.builder-body')
+  await page.getByRole('button', { name: /Build verified Trapper/i }).click()
+  await page.waitForSelector('.trapper-result')
+  const verifiedTrapperCount = await page.locator('.trapper-result').count()
+  const verifiedTrapperHash = await page.locator('.trapper-result code').textContent()
+  await page.locator('.trapper-builder').screenshot({ path: path.join(outputDir, '01e-desktop-trading-trapper.png') })
   await page.getByRole('button', { name: /MARKET/ }).last().click()
   await page.getByRole('button', { name: /Simulate buy/i }).click()
   await page.getByRole('button', { name: /SELL \/ SHORT/i }).click()
@@ -245,6 +253,9 @@ async function captureDesktop() {
       emptyStandingsMessageCount,
       tournamentInviteCount,
       tournamentStandingCount,
+      tradingTrapperCount,
+      verifiedTrapperCount,
+      verifiedTrapperHash,
     },
     errors,
   }
@@ -293,6 +304,19 @@ async function captureMobile() {
   await page.waitForSelector('.market-bubble')
   await page.waitForTimeout(2500)
   await page.screenshot({ path: path.join(outputDir, '03-mobile-market.png'), fullPage: true })
+  await page.locator('.environment-nav button').filter({ hasText: 'Paper Trade' }).click()
+  await page.waitForSelector('.trapper-builder')
+  await page.getByRole('button', { name: /Build from this chart/i }).click()
+  await page.waitForSelector('.builder-body')
+  await page.screenshot({ path: path.join(outputDir, '03c-mobile-trading-trapper.png'), fullPage: true })
+  const tradingTrapperMetrics = await page.locator('.trapper-builder').evaluate((element) => {
+    const rect = element.getBoundingClientRect()
+    return {
+      count: 1,
+      left: rect.left,
+      right: rect.right,
+    }
+  })
   const pageMetrics = await page.evaluate(() => ({
     viewportWidth: document.documentElement.clientWidth,
     scrollWidth: document.documentElement.scrollWidth,
@@ -307,6 +331,9 @@ async function captureMobile() {
     tournamentHubCount: tournamentMetrics.count,
     tournamentInviteCount: tournamentMetrics.inviteCount,
     tournamentWithinViewport: tournamentMetrics.left >= 0 && tournamentMetrics.right <= pageMetrics.viewportWidth,
+    tradingTrapperCount: tradingTrapperMetrics.count,
+    tradingTrapperWithinViewport:
+      tradingTrapperMetrics.left >= 0 && tradingTrapperMetrics.right <= pageMetrics.viewportWidth,
   }
   await page.close()
   return { metrics, errors }
@@ -347,6 +374,13 @@ if (
   mobile.metrics.tournamentHubCount !== 1
   || mobile.metrics.tournamentInviteCount !== 1
   || !mobile.metrics.tournamentWithinViewport
+) process.exitCode = 1
+if (
+  desktop.metrics.tradingTrapperCount !== 1
+  || desktop.metrics.verifiedTrapperCount !== 1
+  || !desktop.metrics.verifiedTrapperHash?.startsWith('sha256:')
+  || mobile.metrics.tradingTrapperCount !== 1
+  || !mobile.metrics.tradingTrapperWithinViewport
 ) process.exitCode = 1
 if (desktop.metrics.whaleLeaderboardCount < 1 || desktop.metrics.marketGenomeCount < 1) process.exitCode = 1
 if (

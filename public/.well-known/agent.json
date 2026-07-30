@@ -1,0 +1,24 @@
+{
+  "name": "Whale Intelligence League",
+  "version": "0.1.0",
+  "mode": "PAPER_ONLY",
+  "homeUrl": "https://whale.dreamnet.ink",
+  "humanApi": "https://dreamnet-whale-league-api.dreamnet-intel.workers.dev",
+  "agentSurfaces": {
+    "tradingTrappers": {
+      "agentCard": "https://dreamnet-trading-trappers.dreamnet-intel.workers.dev/.well-known/agent.json",
+      "mcp": "https://dreamnet-trading-trappers.dreamnet-intel.workers.dev/mcp"
+    },
+    "warperKeeper": {
+      "agentCard": "https://warper-keeper-agent-gateway-production.up.railway.app/.well-known/agent.json",
+      "mcp": "https://warper-keeper-agent-gateway-production.up.railway.app/mcp",
+      "authentication": "operator-issued assignment-scoped bearer key"
+    }
+  },
+  "safety": {
+    "liveTrading": false,
+    "walletAuthority": false,
+    "brokerCredentialsAccepted": false,
+    "fundsMoved": 0
+  }
+}

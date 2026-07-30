@@ -41,6 +41,7 @@
   import PlayerArena from './lib/PlayerArena.svelte'
   import TournamentHub from './lib/TournamentHub.svelte'
   import TraderGallery from './lib/TraderGallery.svelte'
+  import TradingTrapperBuilder from './lib/TradingTrapperBuilder.svelte'
   import Tutorial from './lib/Tutorial.svelte'
   import FarcasterIdentity from './lib/FarcasterIdentity.svelte'
   import WalletDialog from './lib/WalletDialog.svelte'
@@ -158,6 +159,7 @@
     ? assets.filter((asset) => `${asset.symbol} ${asset.name}`.toLowerCase().includes(searchTerm.trim().toLowerCase()))
     : assets
   $: benchmarkSignal = signals[0]
+  $: selectedSignal = signals.find((signal) => signal.asset.id === selectedAssetId)
   $: swapToAsset = assets.find((asset) => asset.id === swapToId) ?? assets.find((asset) => asset.symbol === 'USDC') ?? assets[1]
   $: swapQuote = swapToAsset.price > 0 ? (swapFromAmount * selectedAsset.price * 0.9982) / swapToAsset.price : 0
   $: activeEnvironmentMeta = environments.find((environment) => environment.id === activeEnvironment) ?? environments[0]
@@ -1271,6 +1273,23 @@
         {asks}
         {bookStatus}
         ondayschange={setChartDays}
+      />
+      <TradingTrapperBuilder
+        asset={selectedAsset}
+        {chartDays}
+        {chartMode}
+        suggestedDirection={selectedSignal?.direction === 'LONG BIAS' ? 'long' : selectedSignal?.direction === 'SHORT BIAS' ? 'short' : 'neutral'}
+        suggestedThesis={selectedSignal?.thesis ?? ''}
+        suggestedInvalidation={selectedSignal?.invalidation ?? ''}
+        suggestedConfidence={(selectedSignal?.score ?? 50) / 100}
+        paperPositionUsd={orderAmountUsd}
+        stopPrice={orderStopLoss}
+        takeProfitPrice={orderTakeProfit}
+        maxSlippageBps={Math.round(swapSlippage * 100)}
+        onbuilt={(trapper) => trackBetaEvent('trading_trapper_built', {
+          symbol: trapper.observation.symbol,
+          data_mode: trapper.observation.dataMode,
+        })}
       />
 
       {:else if activeEnvironment === 'ledger'}

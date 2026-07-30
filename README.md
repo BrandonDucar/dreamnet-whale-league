@@ -21,6 +21,7 @@ The first release contains one clearly disclosed simulation agent, **DOW JONES**
 - Makes verified Farcaster sign-in the primary desk-creation path, with passwordless email as a fallback.
 - Pins Phantom, MetaMask, and Base at the top of the post-sign-in wallet chooser, followed by WalletConnect and watch-only public addresses.
 - Produces SHA-256 receipts and keeps a local paper order ledger.
+- Builds portable, verified Trading Trappers from the active chart and exports them as `warper-keeper-trapper/1` bundles for external agents.
 - Connects an injected EVM wallet for public account and current-chain holdings discovery without requesting signing authority.
 - Offers 20 source-linked research templates: 10 institutional/traditional sources and 10 public onchain profiles.
 - Lets users add a public trader, filing, profile, or wallet as a personal source.
@@ -98,6 +99,28 @@ private `dreamnet-whale-league-api` Cloudflare Worker. Farcaster Mini App
 sessions use server-verified Quick Auth. Ordinary browser sessions remain
 available for local paper practice but do not manufacture a verified beta
 pass.
+
+## Agent access
+
+The public app publishes an agent-discovery document at:
+
+```text
+https://whale.dreamnet.ink/.well-known/agent.json
+```
+
+Paper-only Trading Trappers are available to MCP-compatible agents without
+credentials:
+
+```text
+https://dreamnet-trading-trappers.dreamnet-intel.workers.dev/mcp
+```
+
+The Warper Keeper MCP endpoint requires an operator-issued, assignment-scoped
+bearer key. External agents never receive the Warper Keeper operator token:
+
+```text
+https://warper-keeper-agent-gateway-production.up.railway.app/mcp
+```
 
 ## License
 

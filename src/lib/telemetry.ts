@@ -12,6 +12,7 @@ export type BetaEventName =
   | 'wallet_scan_failed'
   | 'paper_plan_created'
   | 'trader_template_seeded'
+  | 'trading_trapper_built'
   | 'paper_order_recorded'
   | 'paper_order_blocked'
   | 'paper_swap_recorded'
