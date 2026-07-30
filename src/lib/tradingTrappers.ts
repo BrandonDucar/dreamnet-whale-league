@@ -39,6 +39,7 @@ export type TradingTrapperDraft = {
     provider:
       | 'tradingview-lightweight-charts'
       | 'tradingview-desktop-user-export'
+      | 'alpaca-market-data'
       | 'market-api'
       | 'manual'
     title: string
@@ -124,4 +125,3 @@ export function downloadJson(fileName: string, payload: unknown) {
   anchor.click()
   URL.revokeObjectURL(url)
 }
-
