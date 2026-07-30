@@ -41,8 +41,9 @@ Quick Auth tokens, signatures, wallet addresses, or contact data.
 Farcaster requires a signed account association for the exact production
 domain. Generate it while signed into the `ghostmintops` Farcaster account:
 
-1. Open `https://farcaster.xyz/~/developers/mini-apps/manifest`.
-2. Use the domain `whale.dreamnet.ink`.
+1. Open `https://farcaster.xyz/~/developers/new?domain=whale.dreamnet.ink`.
+2. Use the exact hostname `whale.dreamnet.ink` without `https://`, a path,
+   query parameters, or a trailing slash.
 3. Enter the Mini App metadata below.
 4. Download or copy the complete manifest.
 5. Save it as `public/.well-known/farcaster.json`.
