@@ -186,7 +186,7 @@
         </button>
         <div class="entry-boundary">
           <ShieldCheck size={13} />
-          <span>{verifiedEntryEnabled ? 'Farcaster verifies your player identity. No wallet signature or trading permission is requested.' : 'Web practice stays on this device. Open in Farcaster to create and share a verified beta pass.'}</span>
+          <span>{verifiedEntryEnabled ? 'Farcaster verifies your player identity server-side. No wallet signature or trading permission is requested.' : 'Web practice stays on this device. Open in Farcaster to create and share a verified beta pass.'}</span>
         </div>
         {#if entryError}<div class="entry-error"><AlertTriangle size={13} /><span>{entryError}</span></div>{/if}
       {:else}
