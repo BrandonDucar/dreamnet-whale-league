@@ -1,4 +1,9 @@
 {
+  "accountAssociation": {
+    "header": "eyJmaWQiOjE0NzcxNDIsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHgxZjJFRWFCYzMwMGQ2OWREOTIwNjM2YkZiNTRmODZFRDBFNTBCOUMyIn0",
+    "payload": "eyJkb21haW4iOiJ3aGFsZS5kcmVhbW5ldC5pbmsifQ",
+    "signature": "bBGSXjS8f6vxaTnS/iSi5eVRsBCR5Eo58eoTFPvRiB16QYYJ7FbAd7P8ASQyDGTnifEmBxttcVJU79zalnBSIxs="
+  },
   "miniapp": {
     "version": "1",
     "name": "Whale Intelligence League",
