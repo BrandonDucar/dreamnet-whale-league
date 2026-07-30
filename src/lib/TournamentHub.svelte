@@ -1,6 +1,12 @@
 <script lang="ts">
-  import { Check, Copy, FileCheck2, Share2, ShieldCheck, Swords, Target, Ticket, Trophy, UserPlus, Users } from '@lucide/svelte'
+  import { AlertTriangle, Check, Copy, FileCheck2, LoaderCircle, Share2, ShieldCheck, Swords, Target, Ticket, Trophy, UserPlus, Users } from '@lucide/svelte'
   import { onMount } from 'svelte'
+  import {
+    acceptFounderCupInvitation,
+    createFounderCupInvitation,
+    FounderCupApiError,
+  } from './founderCupApi'
+  import { shareFounderCupInvite } from './miniapp'
   import {
     buildTournamentStandings,
     createTournamentInviteCode,
@@ -15,6 +21,7 @@
 
   export let member: Member | null
   export let receipts: BattleReceipt[]
+  export let verifiedEntryEnabled: boolean
   export let onrequirejoin: () => void
   export let onpractice: () => void
   export let onplayers: () => void
@@ -26,6 +33,8 @@
   let entry: TournamentEntry | null = null
   let pendingInvite = ''
   let copied = false
+  let entering = false
+  let entryError = ''
   let shareMessage = ''
 
   $: standings = buildTournamentStandings(receipts)
@@ -45,7 +54,10 @@
     try {
       const parsed = JSON.parse(saved) as TournamentEntry
       if (parsed.seasonId === FOUNDER_CUP_ID && isTournamentInviteCode(parsed.inviteCode)) {
-        entry = parsed
+        entry = {
+          ...parsed,
+          verification: parsed.verification === 'farcaster' ? 'farcaster' : 'local',
+        }
         onentrychange(entry)
       } else {
         localStorage.removeItem(TOURNAMENT_ENTRY_STORAGE_KEY)
@@ -57,26 +69,45 @@
     }
   })
 
-  function enterTournament() {
+  async function enterTournament() {
     if (!member) {
       onrequirejoin()
       return
     }
+    entryError = ''
+    entering = true
     const source: TournamentEntry['source'] = pendingInvite ? 'invite' : 'founder'
-    entry = {
-      seasonId: FOUNDER_CUP_ID,
-      inviteCode: pendingInvite || createTournamentInviteCode(),
-      enteredAt: new Date().toISOString(),
-      source,
+    try {
+      let inviteCode = createTournamentInviteCode()
+      let verification: TournamentEntry['verification'] = 'local'
+      if (verifiedEntryEnabled) {
+        if (pendingInvite) await acceptFounderCupInvitation(pendingInvite)
+        const invitation = await createFounderCupInvitation()
+        inviteCode = invitation.code
+        verification = 'farcaster'
+      }
+      entry = {
+        seasonId: FOUNDER_CUP_ID,
+        inviteCode,
+        enteredAt: new Date().toISOString(),
+        source,
+        verification,
+      }
+      localStorage.setItem(TOURNAMENT_ENTRY_STORAGE_KEY, JSON.stringify(entry))
+      onentrychange(entry)
+      onenroll(source)
+      oninvite('created')
+    } catch (error) {
+      entryError = error instanceof FounderCupApiError
+        ? error.message
+        : 'Founder Cup entry could not be completed. Try again.'
+    } finally {
+      entering = false
     }
-    localStorage.setItem(TOURNAMENT_ENTRY_STORAGE_KEY, JSON.stringify(entry))
-    onentrychange(entry)
-    onenroll(source)
-    if (!pendingInvite) oninvite('created')
   }
 
   async function copyInvite() {
-    if (!entry) return
+    if (!entry || entry.verification !== 'farcaster') return
     await navigator.clipboard.writeText(createTournamentShareUrl(entry.inviteCode))
     copied = true
     shareMessage = 'Invite link copied'
@@ -88,8 +119,14 @@
   }
 
   async function shareInvite() {
-    if (!entry) return
+    if (!entry || entry.verification !== 'farcaster') return
     const url = createTournamentShareUrl(entry.inviteCode)
+    if (verifiedEntryEnabled) {
+      const result = await shareFounderCupInvite(url)
+      shareMessage = result?.cast ? 'Launch cast created' : ''
+      if (result?.cast) oninvite('shared')
+      return
+    }
     if (!navigator.share) {
       await copyInvite()
       return
@@ -143,7 +180,15 @@
       {#if !member}
         <button class="primary-action" type="button" onclick={onrequirejoin}><UserPlus size={15} /> Create a desk to enter</button>
       {:else if !entry}
-        <button class="primary-action" type="button" onclick={enterTournament}><Ticket size={15} /> {pendingInvite ? 'Accept beta invite' : 'Enter Founder Cup'}</button>
+        <button class="primary-action" type="button" onclick={() => void enterTournament()} disabled={entering}>
+          {#if entering}<LoaderCircle class="spin" size={15} />{:else}<Ticket size={15} />{/if}
+          {entering ? 'Verifying entry…' : pendingInvite && verifiedEntryEnabled ? 'Accept verified invite' : verifiedEntryEnabled ? 'Enter Founder Cup' : 'Start local practice'}
+        </button>
+        <div class="entry-boundary">
+          <ShieldCheck size={13} />
+          <span>{verifiedEntryEnabled ? 'Farcaster verifies your player identity. No wallet signature or trading permission is requested.' : 'Web practice stays on this device. Open in Farcaster to create and share a verified beta pass.'}</span>
+        </div>
+        {#if entryError}<div class="entry-error"><AlertTriangle size={13} /><span>{entryError}</span></div>{/if}
       {:else}
         <div class="round-actions">
           <button type="button" onclick={onplayers}><Users size={15} /><span><strong>Player round</strong><small>Two people, one clock</small></span></button>
@@ -153,10 +198,12 @@
       {/if}
 
       {#if entry}
-        <div class="invite-strip">
-          <div><span>YOUR BETA PASS</span><strong>{entry.inviteCode}</strong><small>{entry.source === 'invite' ? 'Entered through an invite' : 'Founder access'}</small></div>
-          <button type="button" onclick={() => void copyInvite()} title="Copy tournament invite">{#if copied}<Check size={15} />{:else}<Copy size={15} />{/if}</button>
-          <button type="button" onclick={() => void shareInvite()} title="Share tournament invite"><Share2 size={15} /></button>
+        <div class="invite-strip" class:local-pass={entry.verification === 'local'}>
+          <div><span>{entry.verification === 'farcaster' ? 'VERIFIED BETA PASS' : 'LOCAL PRACTICE PASS'}</span><strong>{entry.inviteCode}</strong><small>{entry.verification === 'farcaster' ? entry.source === 'invite' ? 'Invite accepted · fresh share pass issued' : 'Farcaster-verified founder access' : 'Stored on this device · not a shareable beta invite'}</small></div>
+          {#if entry.verification === 'farcaster'}
+            <button type="button" onclick={() => void copyInvite()} title="Copy tournament invite">{#if copied}<Check size={15} />{:else}<Copy size={15} />{/if}</button>
+            <button type="button" onclick={() => void shareInvite()} title="Share tournament invite"><Share2 size={15} /></button>
+          {/if}
           {#if shareMessage}<em>{shareMessage}</em>{/if}
         </div>
       {/if}
@@ -217,6 +264,13 @@
   .qualification-stats small { color: var(--muted); font: 700 6px/1 'IBM Plex Mono', monospace; }
   .qualification-stats strong { font: 800 10px/1 'IBM Plex Mono', monospace; }
   .primary-action { width: calc(100% - 28px); min-height: 42px; display: flex; align-items: center; justify-content: center; gap: 7px; margin: 12px 14px; border: 0; background: var(--lime); color: #111503; cursor: pointer; font: 800 9px/1 'IBM Plex Mono', monospace; }
+  .primary-action:disabled { cursor: wait; opacity: .72; }
+  .entry-boundary, .entry-error { display: flex; align-items: flex-start; gap: 7px; margin: -3px 14px 12px; font: 600 7px/1.45 'IBM Plex Mono', monospace; }
+  .entry-boundary { color: #777180; }
+  .entry-boundary :global(svg) { flex: 0 0 auto; color: var(--green); }
+  .entry-error { padding: 8px; border: 1px solid #6c3139; background: #210d13; color: #ff8c99; }
+  .entry-error :global(svg) { flex: 0 0 auto; }
+  :global(.spin) { animation: spin .8s linear infinite; }
   .round-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); }
   .round-actions button { min-width: 0; min-height: 58px; display: flex; align-items: center; gap: 8px; padding: 9px; border: 0; background: #0c0a12; color: var(--text); cursor: pointer; text-align: left; }
   .round-actions button:hover { background: #17101c; }
@@ -225,6 +279,7 @@
   .round-actions strong { font: 800 8px/1 'IBM Plex Mono', monospace; }
   .round-actions small { color: var(--muted); font: 600 6px/1.25 'IBM Plex Mono', monospace; }
   .invite-strip { min-height: 50px; position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 34px 34px; align-items: center; gap: 6px; padding: 7px 10px 7px 14px; border-top: 1px solid #3a2d16; background: #151107; }
+  .invite-strip.local-pass { grid-template-columns: minmax(0, 1fr); }
   .invite-strip > div { min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 4px 10px; }
   .invite-strip strong { min-width: 0; overflow: hidden; color: var(--amber); text-overflow: ellipsis; font: 800 10px/1 'IBM Plex Mono', monospace; }
   .invite-strip small { grid-column: 1 / -1; color: #81765a; font: 600 6px/1 'IBM Plex Mono', monospace; }
@@ -254,6 +309,7 @@
   .rules-strip small { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; font: 600 6px/1 'IBM Plex Mono', monospace; }
   .positive { color: var(--green) !important; }
   .negative { color: var(--red) !important; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
   @media (max-width: 920px) {
     .tournament-grid { grid-template-columns: 1fr; }

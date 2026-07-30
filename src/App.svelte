@@ -1235,6 +1235,7 @@
       <TournamentHub
         {member}
         {receipts}
+        verifiedEntryEnabled={miniAppRuntime.inMiniApp}
         onrequirejoin={() => (showJoin = true)}
         onpractice={() => openArenaMode('practice')}
         onplayers={() => openArenaMode('players')}

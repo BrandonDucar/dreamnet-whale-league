@@ -9,6 +9,7 @@ export type TournamentEntry = {
   inviteCode: string
   enteredAt: string
   source: 'founder' | 'invite'
+  verification: 'farcaster' | 'local'
 }
 
 export type TournamentStanding = {
@@ -110,7 +111,9 @@ export function createTournamentInviteCode() {
 }
 
 export function isTournamentInviteCode(value: string | null | undefined) {
-  return /^WHLE-BETA-[A-Z0-9]{8}$/.test(value?.trim().toUpperCase() ?? '')
+  return /^WHLE-BETA-(?:[A-Z0-9]{8}|[A-F0-9]{16})$/.test(
+    value?.trim().toUpperCase() ?? '',
+  )
 }
 
 export function createTournamentShareUrl(inviteCode: string) {

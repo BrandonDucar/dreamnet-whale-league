@@ -130,6 +130,17 @@ export async function shareWhaleLeague(url = window.location.origin) {
   )
 }
 
+export async function shareFounderCupInvite(url: string) {
+  const sdk = await loadSdk()
+  return within(
+    sdk.actions.composeCast({
+      text: 'Join my paper-trading desk in the Whale League Founder Cup. Live market data, player battles, and receipted simulation. No live funds during beta.',
+      embeds: [url],
+    }),
+    undefined,
+  )
+}
+
 export async function miniAppSelectionHaptic(capabilities: string[]) {
   if (!capabilities.includes('haptics.selectionChanged')) return
   const sdk = await loadSdk()

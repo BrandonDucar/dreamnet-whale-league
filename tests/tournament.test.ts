@@ -58,6 +58,7 @@ assert.equal(standings.find((standing) => standing.participant === 'DOW JONES')?
 assert.equal(standings.find((standing) => standing.participant === 'Alice')?.isSimulation, false)
 
 assert.equal(isTournamentInviteCode('WHLE-BETA-A1B2C3D4'), true)
+assert.equal(isTournamentInviteCode('WHLE-BETA-A1B2C3D4E5F60718'), true)
 assert.equal(isTournamentInviteCode('WHLE-BETA-FAKE'), false)
 assert.equal(
   createTournamentShareUrl('WHLE-BETA-A1B2C3D4'),
