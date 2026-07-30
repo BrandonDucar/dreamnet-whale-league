@@ -15,6 +15,9 @@ Mini App launch URL:
 - Farcaster host context for local paper-desk identity
 - Host capability and chain detection
 - Native Farcaster EVM provider when supported
+- Server-verified Farcaster Quick Auth for Founder Cup entry and invitations
+- One-use, expiring, revocable Founder Cup invitations backed by Cloudflare D1
+- Fresh outbound share pass after an incoming invitation is accepted
 - `addMiniApp`, `composeCast`, and haptics behind capability and manifest gates
 - Safe-area support for mobile hosts
 - Current `fc:miniapp` feed metadata
@@ -27,6 +30,11 @@ Mini App launch URL:
 
 The app remains paper-only. Host wallet support is used only to read an address
 and public balances into the simulator. No live transaction is requested.
+
+The invitation boundary runs separately in the private
+`BrandonDucar/dreamnet-whale-league-api` repository. It stores opaque player
+IDs and one-way identity and invitation hashes. It does not store raw FIDs,
+Quick Auth tokens, signatures, wallet addresses, or contact data.
 
 ## Remaining ownership step
 

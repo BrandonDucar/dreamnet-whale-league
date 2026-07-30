@@ -93,6 +93,12 @@ npm run qa:visual
 
 This repository is the interactive Svelte product. The public launch and explanation site lives separately in `dreamnet-whale-league-site`. Evidence schemas will move into the shared `dreamnet-evidence-core` package as the league expands beyond its first workout.
 
+Founder Cup authentication and invitation state live behind the separate
+private `dreamnet-whale-league-api` Cloudflare Worker. Farcaster Mini App
+sessions use server-verified Quick Auth. Ordinary browser sessions remain
+available for local paper practice but do not manufacture a verified beta
+pass.
+
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE).
