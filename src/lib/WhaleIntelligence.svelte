@@ -3,6 +3,7 @@
     Activity,
     BarChart3,
     BellPlus,
+    Check,
     Clock3,
     ExternalLink,
     Fingerprint,
@@ -191,9 +192,22 @@
     if (!event.volume24h) return 0
     return Math.min(event.liquidity / event.volume24h, 9.99)
   }
+
+  export let oncopywhale: ((trade: PolymarketActivity, trader: PolymarketTrader) => void) | undefined = undefined
+  let copiedTradeNotice = ''
+
+  function handleCopyTrade(trade: PolymarketActivity) {
+    if (!selectedTrader) return
+    oncopywhale?.(trade, selectedTrader)
+    copiedTradeNotice = `Copied ${selectedTrader.userName}'s ${trade.side} ${trade.outcome || 'trade'} to your Paper Desk!`
+    setTimeout(() => { copiedTradeNotice = '' }, 4000)
+  }
 </script>
 
 <section class="signal-lab" id="whale-intelligence" aria-labelledby="signal-lab-title">
+  {#if copiedTradeNotice}
+    <div class="copied-notice-banner"><Check size={14} /> {copiedTradeNotice}</div>
+  {/if}
   <div class="lab-head">
     <div>
       <span class="lab-kicker"><Fingerprint size={15} /> PUBLIC MARKET FORENSICS</span>
@@ -290,15 +304,22 @@
                     <span>TIMESTAMP</span>
                   </div>
                   {#each activity.slice(0, 8) as trade}
-                    <a class="table-row-link" href={`https://polymarket.com/event/${trade.eventSlug || trade.slug}`} target="_blank" rel="noreferrer">
-                      <div><span class="side-badge" class:sell={trade.side === 'SELL'}>{trade.side}</span></div>
-                      <div class="market-info">
-                        <strong>{trade.outcome || 'Position'}</strong>
-                        <small>{trade.title}</small>
-                      </div>
-                      <div><strong>{money(trade.usdcSize, true)}</strong></div>
-                      <div><small>{relativeTime(trade.timestamp)}</small></div>
-                    </a>
+                    <div class="table-row-item">
+                      <a class="table-row-link" href={`https://polymarket.com/event/${trade.eventSlug || trade.slug}`} target="_blank" rel="noreferrer">
+                        <div><span class="side-badge" class:sell={trade.side === 'SELL'}>{trade.side}</span></div>
+                        <div class="market-info">
+                          <strong>{trade.outcome || 'Position'}</strong>
+                          <small>{trade.title}</small>
+                        </div>
+                        <div><strong>{money(trade.usdcSize, true)}</strong></div>
+                        <div><small>{relativeTime(trade.timestamp)}</small></div>
+                      </a>
+                      {#if oncopywhale}
+                        <button type="button" class="copy-whale-trade-btn" onclick={() => handleCopyTrade(trade)}>
+                          Copy to Desk
+                        </button>
+                      {/if}
+                    </div>
                   {/each}
                 </div>
               </div>
@@ -423,8 +444,12 @@
   .active-trades-section .panel-label { padding: 9px 12px; background: #0c1017; }
   .activity-table { display: flex; flex-direction: column; }
   .activity-table .table-head { display: grid; grid-template-columns: 60px 1fr 90px 75px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: #0f1520; color: var(--muted); font: 700 7px/1 'IBM Plex Mono', monospace; }
-  .table-row-link { display: grid; grid-template-columns: 60px 1fr 90px 75px; align-items: center; padding: 8px 12px; border-bottom: 1px solid #1a2230; color: var(--text); text-decoration: none; font: 600 9px/1 'IBM Plex Mono', monospace; }
-  .table-row-link:hover { background: #131b29; }
+  .copied-notice-banner { display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: #0d261a; border-bottom: 1px solid #175438; color: #4ade80; font: 700 8.5px/1 'IBM Plex Mono', monospace; }
+  .table-row-item { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #1a2230; background: #07090f; }
+  .table-row-item:hover { background: #131b29; }
+  .table-row-link { flex: 1; display: grid; grid-template-columns: 60px 1fr 90px 75px; align-items: center; padding: 8px 12px; color: var(--text); text-decoration: none; font: 600 9px/1 'IBM Plex Mono', monospace; }
+  .copy-whale-trade-btn { margin-right: 12px; padding: 5px 9px; border: 1px solid #1e3b5c; background: #0d1e33; color: var(--cyan); font: 800 7.5px/1 'IBM Plex Mono', monospace; cursor: pointer; border-radius: 3px; white-space: nowrap; transition: all 0.15s ease; }
+  .copy-whale-trade-btn:hover { background: var(--cyan); color: #07111a; }
   .side-badge { padding: 3px 6px; border-radius: 2px; background: #064e3b; color: #34d399; font: 800 7px/1 'IBM Plex Mono', monospace; }
   .side-badge.sell { background: #7f1d1d; color: #fca5a5; }
   .market-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow: hidden; }

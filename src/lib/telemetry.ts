@@ -25,6 +25,9 @@ export type BetaEventName =
   | 'environment_opened'
   | 'miniapp_added'
   | 'miniapp_shared'
+  | 'whale_group_signal_rehearsed'
+  | 'whale_group_signal_seeded'
+  | 'polymarket_whale_copied'
 
 export type BetaEventProperty = string | number | boolean | null
 

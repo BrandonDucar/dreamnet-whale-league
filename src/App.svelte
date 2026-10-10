@@ -46,6 +46,7 @@
   import FarcasterIdentity from './lib/FarcasterIdentity.svelte'
   import WalletDialog from './lib/WalletDialog.svelte'
   import WhaleIntelligence from './lib/WhaleIntelligence.svelte'
+  import WhaleTradingDesk from './lib/WhaleTradingDesk.svelte'
   import { hasReownProject, openReown, subscribeReownConnection } from './lib/appkit'
   import type { ReownChoice, ReownConnection } from './lib/appkit'
   import type { FarcasterIdentity as FarcasterIdentityData } from './lib/farcaster'
@@ -719,6 +720,86 @@
     })
   }
 
+  async function handleRehearseWhaleSignal(asset: MarketAsset, side: PaperOrderSide, amountUsd: number, signal: import('./lib/whaleGroup').AlphaCrystalSignal) {
+    const success = await settlePaperTrade(asset, side, amountUsd)
+    if (success) {
+      const order: PaperOrder = {
+        id: `whale-${signal.id}-${Date.now().toString(36)}`,
+        hash: signal.receiptHash,
+        createdAt: new Date().toISOString(),
+        symbol: asset.symbol,
+        assetId: asset.id,
+        side,
+        type: 'market',
+        amountUsd,
+        referencePrice: asset.price,
+        status: 'filled',
+        fundsMoved: 0,
+        settled: true,
+      }
+      paperOrders = [order, ...paperOrders]
+      localStorage.setItem('whale-league-paper-orders', JSON.stringify(paperOrders))
+      walletNotice = `Whale Group Rehearsal filled: ${side.toUpperCase()} $${amountUsd.toFixed(2)} ${asset.symbol} via ${signal.strategyType}. Receipt: sha256_${signal.receiptHash.slice(0, 10)}.`
+      trackBetaEvent('whale_group_signal_rehearsed', {
+        signal_id: signal.id,
+        asset: asset.symbol,
+        strategy: signal.strategyType,
+        amount_usd: amountUsd,
+      })
+    }
+  }
+
+  function handleSeedWhaleSignal(signal: import('./lib/whaleGroup').AlphaCrystalSignal) {
+    const asset = assets.find((a) => a.symbol.toUpperCase() === signal.assetSymbol.toUpperCase())
+    const price = signal.entryPriceUsd ?? asset?.price ?? 100
+    const qty = Number((((paperBalance * (signal.suggestedAllocationPct / 100))) / price).toFixed(6))
+    const pos: PaperPosition = {
+      id: `seeded-whale-${signal.id}`,
+      assetId: asset?.id ?? signal.assetId,
+      chainId: '0x2105',
+      chain: 'Base',
+      symbol: signal.assetSymbol,
+      name: signal.assetName,
+      initialQuantity: 0,
+      quantity: Math.max(0.01, qty),
+      averageCostUsd: price,
+      image: asset?.image ?? '',
+      source: 'paper-trade',
+    }
+    paperPositions = [pos, ...paperPositions.filter((p) => p.id !== pos.id)]
+    persistPaperPortfolio()
+    walletNotice = `Seeded Whale Group signal ${signal.assetSymbol} (${signal.strategyType}) into your paper desk portfolio!`
+    trackBetaEvent('whale_group_signal_seeded', {
+      signal_id: signal.id,
+      asset: signal.assetSymbol,
+      strategy: signal.strategyType,
+    })
+  }
+
+  function handleCopyPolymarketTrade(trade: import('./lib/polymarket').PolymarketActivity, trader: import('./lib/polymarket').PolymarketTrader) {
+    const amountUsd = Math.min(50, paperBalance * 0.2)
+    const pos: PaperPosition = {
+      id: `seeded-poly-${trader.wallet.slice(0, 8)}-${Date.now().toString(36)}`,
+      assetId: 'usd-coin',
+      chainId: '0x2105',
+      chain: 'Base',
+      symbol: 'USDC',
+      name: `${trade.outcome || 'Polymarket'}: ${trade.title.slice(0, 30)}...`,
+      initialQuantity: 0,
+      quantity: amountUsd,
+      averageCostUsd: 1.0,
+      source: 'paper-trade',
+    }
+    paperPositions = [pos, ...paperPositions]
+    persistPaperPortfolio()
+    walletNotice = `Copied whale ${trader.userName}'s ${trade.side} ${trade.outcome || 'position'} ($${amountUsd} FKUSDC) to your Paper Desk!`
+    trackBetaEvent('polymarket_whale_copied', {
+      trader: trader.userName,
+      wallet: trader.wallet,
+      amount_usd: amountUsd,
+    })
+  }
+
   async function settlePaperSwap() {
     const normalizedChainId = walletChainId.toLowerCase() || '0x2105'
     const amountUsd = swapFromAmount * selectedAsset.price
@@ -1190,6 +1271,15 @@
           <button class="create-desk-button" type="button" onclick={() => (showJoin = true)}><UserRound size={16} /> Create paper desk</button>
         {/if}
       </section>
+
+      <!-- WHALE TRADING GROUP COMMAND DESK -->
+      <WhaleTradingDesk
+        {paperBalance}
+        {assets}
+        onrehearse={handleRehearseWhaleSignal}
+        onseedposition={handleSeedWhaleSignal}
+      />
+
       <BetaRunway
         deskReady={Boolean(member)}
         walletReady={walletScanComplete}
@@ -1230,7 +1320,7 @@
       {#if researchView === 'sources'}
         <TraderGallery {walletAddress} onseedpositions={handleSeedTraderPositions} />
       {:else}
-        <WhaleIntelligence />
+        <WhaleIntelligence oncopywhale={handleCopyPolymarketTrade} />
       {/if}
 
       {:else if activeEnvironment === 'arena'}
